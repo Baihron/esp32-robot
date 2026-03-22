@@ -11,6 +11,7 @@
 #include "display_task.h"
 #include "button_task.h"
 #include "face_detect_task.h"
+#include "flash_driver.h"
 #include "fs_driver.h"
 #include "state_manager.h"
 #include "task_controller.h"
@@ -96,6 +97,8 @@ static esp_err_t init_display_system(void)
 // 初始化文件系统
 static esp_err_t init_filesystem(void)
 {
+    face_flash_storage_init();
+
     if (!g_system_config.sd_card_enabled) {
         ESP_LOGI(TAG, "SD card system disabled by config");
         return ESP_OK;

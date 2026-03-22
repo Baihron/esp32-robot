@@ -9,6 +9,7 @@
 
 #ifdef CONFIG_DEBUG_PRINT
 #include "esp_heap_caps.h"
+#include "frame_queue.h"
 #endif
 
 static const char *TAG = "APP";

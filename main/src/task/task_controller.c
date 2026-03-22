@@ -142,10 +142,14 @@ static void enter_unlocked_mode(void)
     ESP_LOGI(TAG, "Unlocked mode entered, system ready");
 }
 
+volatile bool flag_face_enrolling = false;
+
 static void enter_face_enrolling_mode(void)
 {
     ESP_LOGI(TAG, "Entering face enrolling mode...");
-    
+
+    flag_face_enrolling = true;
+
     // 确保显示任务运行
     if (!g_tasks.display_running && g_tasks.display_initialized) {
         display_task_start();
@@ -212,7 +216,7 @@ static void on_state_change(system_state_t old_state, system_state_t new_state)
         case STATE_FACE_ENROLLING:
             enter_face_enrolling_mode();
             break;
-            
+
         case STATE_SHUTTING_DOWN:
             enter_shutting_down_mode();
             break;

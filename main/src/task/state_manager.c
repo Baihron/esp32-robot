@@ -53,9 +53,13 @@ static const state_transition_t TRANSITIONS[] = {
     {STATE_UNLOCKED, EVENT_POWER_OFF, STATE_SHUTTING_DOWN},
     {STATE_UNLOCKED, EVENT_START_ENROLL, STATE_FACE_ENROLLING},
     
+    // 从解锁到开始人脸录入
+    {STATE_UNLOCKED, EVENT_START_ENROLL, STATE_FACE_ENROLLING},
+    {STATE_UNLOCKED, EVENT_POWER_OFF, STATE_SHUTTING_DOWN},
+
     // 从人脸录入状态
     {STATE_FACE_ENROLLING, EVENT_ENROLL_COMPLETE, STATE_UNLOCKED},
-    {STATE_FACE_ENROLLING, EVENT_ENROLL_CANCEL, STATE_LOCKED},
+    {STATE_FACE_ENROLLING, EVENT_ENROLL_CANCEL, STATE_UNLOCKED},
     
     // 从关机状态
     {STATE_SHUTTING_DOWN, EVENT_POWER_ON, STATE_SLEEP}
@@ -115,8 +119,10 @@ void state_manager_handle_event(system_event_t event)
                 if (new_state == STATE_UNLOCKED && event == EVENT_ENROLL_COMPLETE) {
                     g_state.face_enrolled = true;
                     ESP_LOGI(TAG, "Face enrolled successfully");
-                }
-                else if (new_state == STATE_SLEEP) {
+                } else if(new_state == STATE_UNLOCKED && event == EVENT_ENROLL_CANCEL) {
+                    g_state.face_enrolled = false;
+                    ESP_LOGI(TAG, "Face enrollment canceled");
+                } else if (new_state == STATE_SLEEP) {
                     g_state.powered_on = false;
                     ESP_LOGI(TAG, "System powered off, entering sleep");
                 }

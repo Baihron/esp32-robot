@@ -5,6 +5,8 @@
 #include "esp_err.h"
 #include "cam_driver.h"
 #include "common_type.h"
+#include "state_manager.h"
+#include "task_controller.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -6,6 +6,7 @@
 #include "camera_task.h"
 #include "display_task.h"
 #include "fs_driver.h"
+#include "flash_driver.h"
 
 // esp-dl 相关头文件
 #include "human_face_detect.hpp"
@@ -417,7 +418,7 @@ static void process_face_detect(void)
     for (int i = 0; i < CAPTURE_FRAME_COUNT; i++) {
         // ESP_LOGI(TAG_FACE, "Capturing frame %d/%d...", i + 1, CAPTURE_FRAME_COUNT);
 
-        // 从队列获取帧（最多等待100ms）
+        // 从队列获取帧
         captured_frames[i].frame = frame_queue_receive_data(pdMS_TO_TICKS(100));
         
         if (!captured_frames[i].frame) {
@@ -612,6 +613,43 @@ static void process_face_detect(void)
             ESP_LOGW(TAG_FACE, "Unsupported frame format: %d", best_frame->format);
         }
     }
+#else
+    static uint32_t start_time  = 0;
+    static uint32_t current_time  = 0;
+    static uint8_t enter_enroll_flag = 0;
+
+    if(state_manager_get_state() == STATE_FACE_ENROLLING) {
+        if(enter_enroll_flag == 0) {
+            start_time = esp_timer_get_time();
+            enter_enroll_flag = 1;
+        }
+
+        if (best_frame_index >= 0 && captured_frames[best_frame_index].frame) {
+            frame_data_t* best_frame = captured_frames[best_frame_index].frame;
+
+            ESP_LOGI(TAG_FACE, "Best frame ready for flash saving: %dx%d, format: %d", best_frame->width, best_frame->height, best_frame->format);
+
+            esp_err_t ret = face_flash_storage_save(best_frame->data, best_frame->size, 0);
+            if (ret == ESP_OK) {
+                ESP_LOGI(TAG_FACE, "✓ Face saved to flash successfully (%zu bytes)", best_frame->size);
+            } else {
+                ESP_LOGE(TAG_FACE, "Failed to save face to flash: %d", ret);
+            }
+
+            ESP_LOGI(TAG_FACE, "Best frame ready for flash saving: %dx%d, format: %d", best_frame->width, best_frame->height, best_frame->format);
+
+            // 切换模式
+            enter_enroll_flag = 0;
+            state_manager_handle_event(EVENT_ENROLL_COMPLETE);
+        }
+        current_time = esp_timer_get_time();
+
+        if(current_time - start_time > 5000000) {
+            enter_enroll_flag = 0;
+            state_manager_handle_event(EVENT_ENROLL_CANCEL);
+        }
+    }
+
 #endif
 
     // 7. 释放所有帧资源

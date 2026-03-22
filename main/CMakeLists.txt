@@ -19,6 +19,7 @@ idf_component_register(
     REQUIRES cam_driver
     REQUIRES button_driver
     REQUIRES fs_driver
+    REQUIRES flash_driver
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE "-fexceptions")

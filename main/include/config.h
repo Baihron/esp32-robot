@@ -102,8 +102,7 @@
     #define DEBUG_HEAP_CHECK()
 #endif
 
-// define CONFIG_DEBUG_PRINT
-
+// #define CONFIG_DEBUG_PRINT
 
 // ============================================
 // 错误码定义
