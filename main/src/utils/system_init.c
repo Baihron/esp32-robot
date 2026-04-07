@@ -11,6 +11,7 @@
 #include "display_task.h"
 #include "button_task.h"
 #include "face_detect_task.h"
+#include "face_recognition_task.h"
 #include "flash_driver.h"
 #include "fs_driver.h"
 #include "state_manager.h"
@@ -137,6 +138,21 @@ static esp_err_t init_face_detection_system(void)
     return ESP_OK;
 }
 
+// 初始化人脸识别系统
+static esp_err_t init_face_recognition_system(void)
+{
+    ESP_LOGI(TAG, "Initializing face recognition system...");
+    esp_err_t ret = face_recognition_task_init();
+    if(ret != ESP_OK) {
+        ESP_LOGE(TAG, "Face recognition task initialization failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    g_tasks.face_recognition_initialized = true;
+    ESP_LOGI(TAG, "Face recognition system ready");
+    return ESP_OK;
+}
+
 // 初始化通信队列
 static esp_err_t init_communication_queues(void)
 {
@@ -247,6 +263,11 @@ esp_err_t system_init_all(void)
         ESP_LOGW(TAG, "Face detection system initialization failed, continuing anyway");
     }
     
+    ret = init_face_recognition_system();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "Face recognition system initialization failed, continuing anyway");
+    }
+
     // 初始化输入系统
     ret = init_input_system();
     if (ret != ESP_OK) {

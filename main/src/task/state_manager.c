@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <string.h>
+#include "esp_partition.h"
 
 static const char *TAG = "STATE_MANAGER";
 
@@ -47,15 +48,15 @@ static const state_transition_t TRANSITIONS[] = {
     
     // 从锁定状态
     {STATE_LOCKED, EVENT_UNLOCK_SUCCESS, STATE_UNLOCKED},
-    {STATE_LOCKED, EVENT_POWER_OFF, STATE_SHUTTING_DOWN},
+    {STATE_LOCKED, EVENT_POWER_OFF, STATE_SLEEP},
     
     // 从解锁状态
-    {STATE_UNLOCKED, EVENT_POWER_OFF, STATE_SHUTTING_DOWN},
+    {STATE_UNLOCKED, EVENT_POWER_OFF, STATE_SLEEP},
     {STATE_UNLOCKED, EVENT_START_ENROLL, STATE_FACE_ENROLLING},
     
     // 从解锁到开始人脸录入
     {STATE_UNLOCKED, EVENT_START_ENROLL, STATE_FACE_ENROLLING},
-    {STATE_UNLOCKED, EVENT_POWER_OFF, STATE_SHUTTING_DOWN},
+    {STATE_UNLOCKED, EVENT_POWER_OFF, STATE_SLEEP},
 
     // 从人脸录入状态
     {STATE_FACE_ENROLLING, EVENT_ENROLL_COMPLETE, STATE_UNLOCKED},
@@ -65,6 +66,111 @@ static const state_transition_t TRANSITIONS[] = {
     {STATE_SHUTTING_DOWN, EVENT_POWER_ON, STATE_SLEEP}
 };
 
+static bool check_face_data_in_flash(void)
+{
+    // return false;
+    // 查找人脸图片分区
+    const esp_partition_t* partition = esp_partition_find_first(
+        ESP_PARTITION_TYPE_DATA,
+        0xff,  // 子类型
+        "face_img"  // 分区名称，与flash_driver.c中一致
+    );
+    
+    if (!partition) {
+        ESP_LOGW(TAG, "Face image partition not found");
+        return false;
+    }
+    
+    ESP_LOGI(TAG, "Checking face data in partition: %s, size: %lu bytes", partition->label, partition->size);
+    
+    // 根据flash_driver.c中的定义
+    #define SLOT_SIZE           (256 * 1024)      // 每个槽位256KB
+    #define SLOT_HEADER_SIZE    2                 // 头部大小（图片大小）
+    
+    int max_slots = partition->size / SLOT_SIZE;
+    
+    // 检查每个槽位
+    for (int slot = 0; slot < max_slots; slot++) {
+        size_t slot_offset = slot * SLOT_SIZE;
+        
+        // 读取头部（图片大小）
+        uint32_t img_size = 0;
+        esp_err_t ret = esp_partition_read(partition, slot_offset, &img_size, sizeof(img_size));
+        
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to read slot %d header: %d", slot, ret);
+            continue;
+        }
+        
+        // 验证图片大小是否合理
+        // 根据face_detect_task.cpp中的逻辑，图片可能是：
+        // 1. JPEG格式（直接保存）
+        // 2. RGB565格式（转换为BMP保存）
+        // 3. RGB888格式（直接保存）
+        
+        // 合理的图片大小范围（根据实际应用调整）
+        // 最小：假设至少10KB
+        // 最大：槽位大小减去头部
+        if (img_size >= 10 * 1024 && img_size <= (SLOT_SIZE - SLOT_HEADER_SIZE)) {
+            ESP_LOGI(TAG, "Found valid face image in slot %d: size=%lu bytes", slot, img_size);
+            
+            // 可选：进一步验证图片数据
+            // 读取部分数据验证格式
+            uint8_t header_buffer[64];
+            ret = esp_partition_read(partition, slot_offset + SLOT_HEADER_SIZE, 
+                                    header_buffer, sizeof(header_buffer));
+            
+            if (ret == ESP_OK) {
+                // 检查常见的图片格式标记
+                bool valid_format = false;
+                
+                // 检查JPEG格式（FF D8开头）
+                if (header_buffer[0] == 0xFF && header_buffer[1] == 0xD8) {
+                    ESP_LOGI(TAG, "  Format: JPEG");
+                    valid_format = true;
+                }
+                // 检查BMP格式（'BM'开头）
+                else if (header_buffer[0] == 'B' && header_buffer[1] == 'M') {
+                    ESP_LOGI(TAG, "  Format: BMP");
+                    valid_format = true;
+                }
+                // 检查PNG格式
+                else if (header_buffer[0] == 0x89 && header_buffer[1] == 'P' && 
+                         header_buffer[2] == 'N' && header_buffer[3] == 'G') {
+                    ESP_LOGI(TAG, "  Format: PNG");
+                    valid_format = true;
+                }
+                // 检查RGB565/RGB888格式（没有特定标记，但数据应该不是全0或全0xFF）
+                else {
+                    // 检查数据是否有效（不是擦除状态）
+                    bool all_zeros = true;
+                    bool all_ff = true;
+                    
+                    for (int i = 0; i < sizeof(header_buffer); i++) {
+                        if (header_buffer[i] != 0x00) all_zeros = false;
+                        if (header_buffer[i] != 0xFF) all_ff = false;
+                    }
+                    
+                    if (!all_zeros && !all_ff) {
+                        ESP_LOGI(TAG, "  Format: Raw image data (RGB565/RGB888)");
+                        valid_format = true;
+                    }
+                }
+                
+                if (valid_format) {
+                    return true;  // 找到有效的人脸图片
+                }
+            }
+        } else if (img_size != 0xFFFFFFFF && img_size != 0) {
+            // 如果大小不合理但不是擦除状态，记录警告
+            ESP_LOGW(TAG, "Invalid image size in slot %d: %lu bytes", slot, img_size);
+        }
+    }
+    
+    ESP_LOGI(TAG, "No valid face image data found in any slot");
+    return false;
+}
+
 // 初始化状态管理器
 void state_manager_init(void)
 {
@@ -72,9 +178,8 @@ void state_manager_init(void)
     g_state.current_state = STATE_SLEEP;
     g_state.previous_state = STATE_SLEEP;
     
-    // 初始化时默认没有录入人脸
-    // 实际应该从存储中读取状态
-    g_state.face_enrolled = false;
+    // 初始化时检查是否有已录入的人脸
+    g_state.face_enrolled = check_face_data_in_flash();
     g_state.powered_on = false;
     g_state.callback = NULL;
     
@@ -105,7 +210,7 @@ void state_manager_handle_event(system_event_t event)
     }
     // 特殊处理：关机事件在锁定或解锁状态时进入关机状态
     else if ((old_state == STATE_LOCKED || old_state == STATE_UNLOCKED) && event == EVENT_POWER_OFF) {
-        new_state = STATE_SHUTTING_DOWN;
+        new_state = STATE_SLEEP;
         transition_found = true;
     }
     // 其他情况查找转换表
@@ -120,7 +225,6 @@ void state_manager_handle_event(system_event_t event)
                     g_state.face_enrolled = true;
                     ESP_LOGI(TAG, "Face enrolled successfully");
                 } else if(new_state == STATE_UNLOCKED && event == EVENT_ENROLL_CANCEL) {
-                    g_state.face_enrolled = false;
                     ESP_LOGI(TAG, "Face enrollment canceled");
                 } else if (new_state == STATE_SLEEP) {
                     g_state.powered_on = false;

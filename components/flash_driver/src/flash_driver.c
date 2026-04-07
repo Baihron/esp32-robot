@@ -13,7 +13,7 @@ static const char *TAG = "FACE_FLASH";
 #define SLOT_SIZE           (256 * 1024)
 
 // 每个槽位头部：存储实际图片大小（4字节）
-#define SLOT_HEADER_SIZE    4
+#define SLOT_HEADER_SIZE    2
 
 // Flash 擦除块大小（4KB）
 #define ERASE_BLOCK_SIZE    4096

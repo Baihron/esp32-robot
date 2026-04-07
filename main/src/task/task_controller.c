@@ -7,6 +7,7 @@
 #include "camera_task.h"
 #include "display_task.h"
 #include "face_detect_task.h"
+#include "face_recognition_task.h"
 #include "frame_queue.h"
 #include "config.h"
 #include "common_type.h"
@@ -37,6 +38,11 @@ static void enter_sleep_mode(void)
         display_task_stop();
     }
 
+    if (g_tasks.face_recognition_running) {
+        ESP_LOGI(TAG, "Stopping face recognition task");
+        face_recognition_task_stop();
+    }
+
     // 清空帧队列
     frame_queue_clear();
 
@@ -55,12 +61,12 @@ static void enter_locked_mode(void)
         }
     }
 
-    if (g_tasks.display_running) {
-        ESP_LOGI(TAG, "start display task");
-        if (display_task_start() == ESP_OK) {
-            ESP_LOGI(TAG, "Display task started");
-        }
-    }
+    // if (g_tasks.display_running) {
+    //     ESP_LOGI(TAG, "start display task");
+    //     if (display_task_start() == ESP_OK) {
+    //         ESP_LOGI(TAG, "Display task started");
+    //     }
+    // }
 
     // 初始化并启动摄像头任务
     if (!g_tasks.camera_initialized) {
@@ -82,14 +88,14 @@ static void enter_locked_mode(void)
     }
 
     // 启动人脸检测任务（用于解锁）
-    if (!g_tasks.face_detection_initialized) {
-        g_tasks.face_detection_initialized = true;
+    if (!g_tasks.face_recognition_initialized) {
+        g_tasks.face_recognition_initialized = true;
     }
     
-    if (!g_tasks.face_detection_running) {
+    if (!g_tasks.face_recognition_running) {
         ESP_LOGI(TAG, "Starting face detection for unlock");
         face_detect_task_start();
-        g_tasks.face_detection_running = true;
+        g_tasks.face_recognition_running = true;
     }
 
     ESP_LOGI(TAG, "Locked mode entered, waiting for face recognition...");
