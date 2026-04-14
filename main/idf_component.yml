@@ -5,6 +5,14 @@ dependencies:
     version: '>=5.4'
 
   espressif/esp32-camera: '*'
-  espressif/human_face_detect: "*"
-  espressif/human_face_recognition: "*"
-  espressif/esp-dl: "*"
+  espressif/human_face_detect: '*'
+  espressif/human_face_recognition: '*'
+  espressif/esp-dl: '*'
+  espressif/esp-sr: '*'
+  espressif/esp_codec_dev: ~1.5.6
+  espressif/esp_audio_effects: '*'
+  espressif/esp_audio_codec: ~2.4.1
+  espressif/cjson: '*'
+  espressif/mqtt: '*'
+  78/esp-wifi-connect: ~3.1.2
+  78/esp-ml307: ~3.6.5

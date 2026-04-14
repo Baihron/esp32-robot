@@ -14,6 +14,9 @@
 
 static const char *TAG = "APP";
 
+
+#include "mico_task.h"
+
 // 系统状态监控任务
 static void system_monitor_task(void)
 {
@@ -103,7 +106,9 @@ void app_main(void)
         NULL,
         tskNO_AFFINITY
     );
-    
+
+    // start_mico_task();
+
     // 主循环（保持空闲）
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));

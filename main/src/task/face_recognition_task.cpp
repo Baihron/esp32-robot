@@ -28,11 +28,11 @@ static face_recognition_callback_t s_callback = nullptr;
 extern task_status_t g_tasks;
 
 // 相似度阈值
-static const float SIMILARITY_THRESHOLD = 0.7f;
+static const float SIMILARITY_THRESHOLD = 0.6f;
 
 // 最大识别尝试次数
 static const int MAX_RECOGNITION_ATTEMPTS = 50;
-static int s_recognition_attempts = 0;
+int s_recognition_attempts = 0;
 
 /**
  * @brief camera_fb_t -> dl::image::img_t
@@ -221,6 +221,7 @@ static void face_recognition_task_func(void *arg)
                     ESP_LOGW(TAG, "Max recognition attempts reached (%d), stopping",
                              MAX_RECOGNITION_ATTEMPTS);
                     g_tasks.face_recognition_running = false;
+                    s_recognition_attempts = 0;
                 }
             }
 
