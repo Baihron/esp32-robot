@@ -8,4 +8,12 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 set(EXTRA_COMPONENT_DIRS components)
 
+idf_component_get_property(lcd_lib esp_lcd COMPONENT_LIB)
+if(lcd_lib)
+    set_source_files_properties(
+        "${IDF_PATH}/components/esp_lcd/rgb/esp_lcd_panel_rgb.c"
+        PROPERTIES COMPILE_OPTIONS "-O0"
+    )
+endif()
+
 project(esp32_demo)

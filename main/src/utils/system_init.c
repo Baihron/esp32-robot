@@ -16,7 +16,8 @@
 #include "fs_driver.h"
 #include "state_manager.h"
 #include "task_controller.h"
-
+#include "audio_manager.h"
+#include "board_wrapper.h"
 
 static const char *TAG = "SYSTEM_INIT";
 
@@ -105,15 +106,15 @@ static esp_err_t init_filesystem(void)
         return ESP_OK;
     }
     
-    ESP_LOGI(TAG, "Initializing SD card...");
+    // ESP_LOGI(TAG, "Initializing SD card...");
 
     // 初始化SD卡
-    esp_err_t ret = fs_sd_card_init("/sdcard");
-    if (ret == ESP_OK) {
-        ESP_LOGI(TAG, "SD card initialized successfully");
-    } else {
-        ESP_LOGW(TAG, "SD card initialization failed: %s (may not be inserted)", esp_err_to_name(ret));
-    }
+    // esp_err_t ret = fs_sd_card_init("/sdcard");
+    // if (ret == ESP_OK) {
+    //     ESP_LOGI(TAG, "SD card initialized successfully");
+    // } else {
+    //     ESP_LOGW(TAG, "SD card initialization failed: %s (may not be inserted)", esp_err_to_name(ret));
+    // }
 
     return ESP_OK;
 }
@@ -229,14 +230,14 @@ esp_err_t system_init_all(void)
         ESP_LOGE(TAG, "State management initialization failed");
         return ret;
     }
-    
+
     // 初始化通信队列
     ret = init_communication_queues();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Communication queues initialization failed");
         return ret;
     }
-    
+
     // 初始化摄像头系统
     ret = init_camera_system();
     if (ret != ESP_OK) {
@@ -256,13 +257,13 @@ esp_err_t system_init_all(void)
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Filesystem initialization failed, continuing anyway");
     }
-    
+
     // 初始化人脸检测系统
     ret = init_face_detection_system();
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Face detection system initialization failed, continuing anyway");
     }
-    
+
     ret = init_face_recognition_system();
     if (ret != ESP_OK) {
         ESP_LOGW(TAG, "Face recognition system initialization failed, continuing anyway");

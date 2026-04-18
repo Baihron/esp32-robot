@@ -1,4 +1,3 @@
-// board.cc
 #include "board.h"
 
 Board* Board::instance_ = nullptr;

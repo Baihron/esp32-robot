@@ -2,9 +2,11 @@
 idf_component_register(
     # 列出所有 .cc 源文件
     SRCS 
-        # protocol.cc
-        # websocket_protocol.cc
-        # mqtt_protocol.cc
+    #    protocol.cc
+    #    protocol_manager.c
+    #    websocket_protocol.cc
+    #    mqtt_protocol.cc
+
     INCLUDE_DIRS 
         "."   # 当前目录，让头文件能被找到
     # 声明该组件对其他 ESP-IDF 组件的依赖

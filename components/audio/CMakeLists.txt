@@ -2,6 +2,7 @@ idf_component_register(
     SRCS
         settings.cc
         audio_service.cc
+        audio_manager.cpp
         audio_codec.cc
         boards/board.cc
         boards/my_board.cc

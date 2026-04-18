@@ -250,7 +250,9 @@ static void face_app_task(void *arg)
             if(!g_tasks.face_recognition_running) {
                 process_face_detect();
             } else {
+#ifdef CONFIG_DEBUG_PRINT
                 ESP_LOGI(TAG_FACE, "人脸识别任务正在运行，请勿重复操作");
+#endif
             }
         }
         
@@ -270,7 +272,7 @@ esp_err_t face_detect_task_init(void)
     BaseType_t ret = xTaskCreatePinnedToCore(
         face_app_task,
         "face_app_task",
-        16384,  // 增加栈大小
+        1024 * 12,  // 增加栈大小
         NULL,
         tskIDLE_PRIORITY + 3,
         &s_face_task_handle,

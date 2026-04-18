@@ -32,7 +32,7 @@ esp_err_t dis_driver_init(const dis_config_t *config)
         .sclk_io_num = config->sclk_gpio,
         .mosi_io_num = config->mosi_gpio,
         .miso_io_num = -1,
-        .max_transfer_sz = g_width * g_height * sizeof(uint16_t),
+        .max_transfer_sz = 2048,
         .flags = 0,
         .intr_flags = 0
     };

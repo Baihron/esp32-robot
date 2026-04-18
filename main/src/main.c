@@ -12,10 +12,9 @@
 #include "frame_queue.h"
 #endif
 
+#include "common_type.h"
+
 static const char *TAG = "APP";
-
-
-#include "mico_task.h"
 
 // 系统状态监控任务
 static void system_monitor_task(void)
@@ -84,10 +83,9 @@ void app_main(void)
         ESP_LOGE(TAG, "System initialization failed: %s", esp_err_to_name(ret));
         return;
     }
-    
-    ESP_LOGI(TAG, "System initialized successfully");
-    
-    // 启动任务控制器
+
+    // ESP_LOGI(TAG, "System initialized successfully");
+    // // 启动任务控制器
     task_controller_start();
 
 #ifdef CONFIG_DEBUG_PRINT
@@ -107,21 +105,19 @@ void app_main(void)
         tskNO_AFFINITY
     );
 
-    // start_mico_task();
-
     // 主循环（保持空闲）
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
 
         // 示例：如果系统未初始化，尝试恢复
-        if (!system_is_initialized()) {
-            ESP_LOGW(TAG, "System not initialized, attempting recovery...");
-            ret = system_init_all();
-            if (ret == ESP_OK) {
-                ESP_LOGI(TAG, "System recovery successful");
-            } else {
-                ESP_LOGE(TAG, "System recovery failed: %s", esp_err_to_name(ret));
-            }
-        }
+        // if (!system_is_initialized()) {
+        //     ESP_LOGW(TAG, "System not initialized, attempting recovery...");
+        //     ret = system_init_all();
+        //     if (ret == ESP_OK) {
+        //         ESP_LOGI(TAG, "System recovery successful");
+        //     } else {
+        //         ESP_LOGE(TAG, "System recovery failed: %s", esp_err_to_name(ret));
+        //     }
+        // }
     }
 }

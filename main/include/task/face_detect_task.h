@@ -8,6 +8,7 @@
 #include "state_manager.h"
 #include "task_controller.h"
 #include "face_recognition_task.h"
+#include "config.h"
 
 #ifdef __cplusplus
 extern "C" {

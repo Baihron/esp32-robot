@@ -28,7 +28,7 @@ static face_recognition_callback_t s_callback = nullptr;
 extern task_status_t g_tasks;
 
 // 相似度阈值
-static const float SIMILARITY_THRESHOLD = 0.6f;
+static const float SIMILARITY_THRESHOLD = 0.5f;
 
 // 最大识别尝试次数
 static const int MAX_RECOGNITION_ATTEMPTS = 50;
@@ -103,7 +103,9 @@ static esp_err_t face_recognition_ai_init(void)
  */
 static bool perform_face_recognition(void)
 {
+#ifdef CONFIG_DEBUG_PRINT
     ESP_LOGI(TAG, "Performing face recognition...");
+#endif
 
     s_recognition_attempts++;
     // 1. 从队列获取最新帧
@@ -138,7 +140,9 @@ static bool perform_face_recognition(void)
     // 4. 人脸检测
     auto det_res = s_face_detect->run(img);
     if (det_res.empty()) {
+#ifdef CONFIG_DEBUG_PRINT
         ESP_LOGW(TAG, "No face detected in frame");
+#endif
         frame_queue_release_data(frame_data);
         return false;
     }
@@ -193,8 +197,9 @@ static void face_recognition_task_func(void *arg)
 
     while (1) {
         if (g_tasks.face_recognition_running) {
+#ifdef CONFIG_DEBUG_PRINT
             ESP_LOGI(TAG, "=== Starting recognition cycle ===");
-
+#endif
             bool success = perform_face_recognition();
 
             if (success) {
@@ -210,22 +215,25 @@ static void face_recognition_task_func(void *arg)
                 g_tasks.face_recognition_running = false;
 
             } else {
+#ifdef CONFIG_DEBUG_PRINT
                 ESP_LOGI(TAG, "Face recognition FAILED");
-
+#endif
                 if (s_callback) {
                     s_callback(false, -1);
                 }
 
                 // 达到最大尝试次数，停止识别
                 if (s_recognition_attempts >= MAX_RECOGNITION_ATTEMPTS) {
-                    ESP_LOGW(TAG, "Max recognition attempts reached (%d), stopping",
-                             MAX_RECOGNITION_ATTEMPTS);
-                    g_tasks.face_recognition_running = false;
+                    ESP_LOGW(TAG, "Max recognition attempts reached (%d), stopping", MAX_RECOGNITION_ATTEMPTS);
+
                     s_recognition_attempts = 0;
+                    state_manager_handle_event(EVENT_POWER_OFF);
                 }
             }
 
+#ifdef CONFIG_DEBUG_PRINT
             ESP_LOGI(TAG, "=== Recognition cycle completed ===");
+#endif
         }
 
         vTaskDelay(pdMS_TO_TICKS(500));

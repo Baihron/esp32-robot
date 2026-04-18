@@ -11,6 +11,8 @@
 #include "frame_queue.h"
 #include "config.h"
 #include "common_type.h"
+#include "audio_manager.h"
+#include "board_wrapper.h"
 
 static const char *TAG = "TASK_CONTROLLER";
 
@@ -23,6 +25,11 @@ static void enter_sleep_mode(void)
     ESP_LOGI(TAG, "Entering sleep mode...");
 
     // 停止所有任务
+    if (g_tasks.face_recognition_running) {
+        ESP_LOGI(TAG, "Stopping face recognition task");
+        face_recognition_task_stop();
+    }
+
     if (g_tasks.face_detection_running) {
         ESP_LOGI(TAG, "Stopping face detection task");
         face_detect_task_stop();
@@ -36,11 +43,6 @@ static void enter_sleep_mode(void)
     if (g_tasks.display_running) {
         ESP_LOGI(TAG, "Stopping display task");
         display_task_stop();
-    }
-
-    if (g_tasks.face_recognition_running) {
-        ESP_LOGI(TAG, "Stopping face recognition task");
-        face_recognition_task_stop();
     }
 
     // 清空帧队列
@@ -61,12 +63,14 @@ static void enter_locked_mode(void)
         }
     }
 
-    // if (g_tasks.display_running) {
-    //     ESP_LOGI(TAG, "start display task");
-    //     if (display_task_start() == ESP_OK) {
-    //         ESP_LOGI(TAG, "Display task started");
-    //     }
-    // }
+    if (!g_tasks.display_running) {
+        // ESP_LOGI(TAG, "start display task");
+        if (display_task_start() == ESP_OK) {
+            ESP_LOGI(TAG, "Display task started");
+        } else {
+            ESP_LOGW(TAG, "Failed to start display task");
+        }
+    }
 
     // 初始化并启动摄像头任务
     if (!g_tasks.camera_initialized) {
@@ -79,7 +83,7 @@ static void enter_locked_mode(void)
             g_tasks.camera_initialized = true;
         }
     }
-    
+
     if (!g_tasks.camera_running) {
         ESP_LOGI(TAG, "Starting camera task");
         if (camera_capture_task_start() == ESP_OK) {
@@ -91,7 +95,7 @@ static void enter_locked_mode(void)
     if (!g_tasks.face_recognition_initialized) {
         g_tasks.face_recognition_initialized = true;
     }
-    
+
     if (!g_tasks.face_recognition_running) {
         ESP_LOGI(TAG, "Starting face detection for unlock");
         face_detect_task_start();
@@ -138,13 +142,13 @@ static void enter_unlocked_mode(void)
    if (!g_tasks.face_detection_initialized) {
         g_tasks.face_detection_initialized = true;
     }
-    
+
     if (!g_tasks.face_detection_running) {
         ESP_LOGI(TAG, "Starting face detection for unlock");
         face_detect_task_start();
         g_tasks.face_detection_running = true;
     }
-    
+
     ESP_LOGI(TAG, "Unlocked mode entered, system ready");
 }
 
@@ -202,23 +206,22 @@ static void on_state_change(system_state_t old_state, system_state_t new_state)
     // 标记 old_state 为已使用，避免编译器警告
     (void)old_state;
     
-    // ESP_LOGI(TAG, "Task controller handling state change: %s -> %s", 
-    //          STATE_NAMES[old_state], STATE_NAMES[new_state]);
+    // ESP_LOGI(TAG, "Task controller handling state change: %s -> %s", STATE_NAMES[old_state], STATE_NAMES[new_state]);
     
     // 根据新状态执行相应操作
     switch (new_state) {
         case STATE_SLEEP:
             enter_sleep_mode();
             break;
-            
+
         case STATE_LOCKED:
             enter_locked_mode();
             break;
-            
+
         case STATE_UNLOCKED:
             enter_unlocked_mode();
             break;
-            
+
         case STATE_FACE_ENROLLING:
             enter_face_enrolling_mode();
             break;
@@ -226,7 +229,7 @@ static void on_state_change(system_state_t old_state, system_state_t new_state)
         case STATE_SHUTTING_DOWN:
             enter_shutting_down_mode();
             break;
-            
+
         default:
             ESP_LOGW(TAG, "Unknown state: %d", new_state);
             break;
