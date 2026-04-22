@@ -51,10 +51,10 @@ static emotion_system_t g_emotion = {
     .context = {
         .x = 120,           // 默认中心X（240/2）
         .y = 120,           // 默认中心Y（240/2）
-        .size = 80,         // 表情大小
+        .size = 100,         // 表情大小
         .color = 0x0000,    // 黑色线条
         .bg_color = 0xFFFF, // 白色背景
-        .line_width = 3     // 线条宽度
+        .line_width = 5     // 线条宽度
     },
     .animation_timer = 0,
     .blink_timer = 0,
@@ -177,100 +177,278 @@ static void draw_arc(uint16_t* framebuffer, uint16_t width, uint16_t height,
 // 绘制各种表情
 static void draw_neutral_face(uint16_t* framebuffer, uint16_t width, uint16_t height, 
                              emotion_context_t* ctx, bool blinking) {
-    // 绘制脸部轮廓
-    draw_circle(framebuffer, width, height, ctx->x, ctx->y, ctx->size, ctx->color, false);
-    
     // 眼睛
-    int16_t eye_y = ctx->y - ctx->size / 4;
-    int16_t eye_radius = ctx->size / 10;
+    int16_t eye_y = ctx->y - 40;  // 眼睛Y位置
+    int16_t eye_radius = 20;      // 眼睛半径（放大）
+    int16_t eye_spacing = 80;     // 眼睛间距
     
-    if (blinking) {
-        // 眨眼效果 - 画一条线
-        draw_line(framebuffer, width, height, 
-                 ctx->x - ctx->size/3, eye_y,
-                 ctx->x - ctx->size/3 + eye_radius*2, eye_y,
-                 ctx->color, ctx->line_width);
-        draw_line(framebuffer, width, height,
-                 ctx->x + ctx->size/3 - eye_radius*2, eye_y,
-                 ctx->x + ctx->size/3, eye_y,
-                 ctx->color, ctx->line_width);
-    } else {
-        // 正常眼睛
-        draw_circle(framebuffer, width, height, 
-                   ctx->x - ctx->size/3, eye_y, eye_radius, ctx->color, true);
-        draw_circle(framebuffer, width, height,
-                   ctx->x + ctx->size/3, eye_y, eye_radius, ctx->color, true);
-    }
+    // if (blinking) {
+    //     // 眨眼效果 - 画一条线
+    //     draw_line(framebuffer, width, height, 
+    //              ctx->x - ctx->size/3, eye_y,
+    //              ctx->x - ctx->size/3 + eye_radius*2, eye_y,
+    //              ctx->color, ctx->line_width);
+    //     draw_line(framebuffer, width, height,
+    //              ctx->x + ctx->size/3 - eye_radius*2, eye_y,
+    //              ctx->x + ctx->size/3, eye_y,
+    //              ctx->color, ctx->line_width);
+    // } else {
+    //     // 正常眼睛
+    //     draw_circle(framebuffer, width, height, 
+    //                ctx->x - ctx->size/3, eye_y, eye_radius, ctx->color, true);
+    //     draw_circle(framebuffer, width, height,
+    //                ctx->x + ctx->size/3, eye_y, eye_radius, ctx->color, true);
+    // }
     
-    // 嘴巴 - 直线
+    // 嘴巴 - 直线（加长加粗）
+    int16_t mouth_y = ctx->y + 40;  // 嘴巴Y位置
+    int16_t mouth_width = 100;      // 嘴巴宽度
+    
     draw_line(framebuffer, width, height,
-             ctx->x - ctx->size/3, ctx->y + ctx->size/4,
-             ctx->x + ctx->size/3, ctx->y + ctx->size/4,
+             ctx->x - mouth_width/2, mouth_y,
+             ctx->x + mouth_width/2, mouth_y,
              ctx->color, ctx->line_width);
 }
 
 static void draw_happy_face(uint16_t* framebuffer, uint16_t width, uint16_t height,
                            emotion_context_t* ctx, bool blinking) {
-    // 脸部轮廓
-    draw_circle(framebuffer, width, height, ctx->x, ctx->y, ctx->size, ctx->color, false);
-    
     // 眼睛
-    int16_t eye_y = ctx->y - ctx->size / 4;
-    int16_t eye_radius = ctx->size / 10;
+    int16_t eye_y = ctx->y - 40;
+    int16_t eye_radius = 20;
+    int16_t eye_spacing = 80;
     
     if (blinking) {
         draw_line(framebuffer, width, height,
-                 ctx->x - ctx->size/3, eye_y,
-                 ctx->x - ctx->size/3 + eye_radius*2, eye_y,
+                 ctx->x - eye_spacing/2, eye_y,
+                 ctx->x - eye_spacing/2 + eye_radius*2, eye_y,
                  ctx->color, ctx->line_width);
         draw_line(framebuffer, width, height,
-                 ctx->x + ctx->size/3 - eye_radius*2, eye_y,
-                 ctx->x + ctx->size/3, eye_y,
+                 ctx->x + eye_spacing/2 - eye_radius*2, eye_y,
+                 ctx->x + eye_spacing/2, eye_y,
                  ctx->color, ctx->line_width);
     } else {
         draw_circle(framebuffer, width, height,
-                   ctx->x - ctx->size/3, eye_y, eye_radius, ctx->color, true);
+                   ctx->x - eye_spacing/2, eye_y, eye_radius, ctx->color, true);
         draw_circle(framebuffer, width, height,
-                   ctx->x + ctx->size/3, eye_y, eye_radius, ctx->color, true);
+                   ctx->x + eye_spacing/2, eye_y, eye_radius, ctx->color, true);
     }
     
     // 微笑的嘴巴（弧线）
+    int16_t mouth_y = ctx->y + 20;
+    int16_t mouth_radius = 60;
+    
     draw_arc(framebuffer, width, height,
-            ctx->x, ctx->y + ctx->size/6, ctx->size/3,
+            ctx->x, mouth_y, mouth_radius,
             M_PI * 0.2, M_PI * 0.8, ctx->color, ctx->line_width);
 }
 
 static void draw_sad_face(uint16_t* framebuffer, uint16_t width, uint16_t height,
                          emotion_context_t* ctx, bool blinking) {
-    // 脸部轮廓
-    draw_circle(framebuffer, width, height, ctx->x, ctx->y, ctx->size, ctx->color, false);
-    
-    // 眼睛（下垂）
-    int16_t eye_y = ctx->y - ctx->size / 4;
-    int16_t eye_radius = ctx->size / 12;
+    int16_t eye_y = ctx->y - 40;
+    int16_t eye_radius = 18;
+    int16_t eye_spacing = 80;
     
     if (blinking) {
         draw_line(framebuffer, width, height,
-                 ctx->x - ctx->size/3, eye_y,
-                 ctx->x - ctx->size/3 + eye_radius*2, eye_y,
+                 ctx->x - eye_spacing/2, eye_y,
+                 ctx->x - eye_spacing/2 + eye_radius*2, eye_y,
                  ctx->color, ctx->line_width);
         draw_line(framebuffer, width, height,
-                 ctx->x + ctx->size/3 - eye_radius*2, eye_y,
-                 ctx->x + ctx->size/3, eye_y,
+                 ctx->x + eye_spacing/2 - eye_radius*2, eye_y,
+                 ctx->x + eye_spacing/2, eye_y,
                  ctx->color, ctx->line_width);
     } else {
         draw_circle(framebuffer, width, height,
-                   ctx->x - ctx->size/3, eye_y, eye_radius, ctx->color, true);
+                   ctx->x - eye_spacing/2, eye_y, eye_radius, ctx->color, true);
         draw_circle(framebuffer, width, height,
-                   ctx->x + ctx->size/3, eye_y, eye_radius, ctx->color, true);
+                   ctx->x + eye_spacing/2, eye_y, eye_radius, ctx->color, true);
     }
     
-    // 悲伤的嘴巴（倒弧线）
+    // 悲伤的嘴巴（大倒弧线）
+    int16_t mouth_y = ctx->y + 60;
+    int16_t mouth_radius = 50;
+    
     draw_arc(framebuffer, width, height,
-            ctx->x, ctx->y + ctx->size/3, ctx->size/3,
+            ctx->x, mouth_y, mouth_radius,
             M_PI * 1.2, M_PI * 1.8, ctx->color, ctx->line_width);
 }
 
+// 修改生气表情
+static void draw_angry_face(uint16_t* framebuffer, uint16_t width, uint16_t height,
+                           emotion_context_t* ctx, bool blinking) {
+    // 皱眉的眼睛（斜线）
+    int16_t eye_y = ctx->y - 40;
+    int16_t eye_spacing = 80;
+    
+    // 左眼（皱眉）
+    draw_line(framebuffer, width, height,
+             ctx->x - eye_spacing/2 - 10, eye_y - 10,
+             ctx->x - eye_spacing/2 + 30, eye_y,
+             ctx->color, ctx->line_width);
+    // 右眼（皱眉）
+    draw_line(framebuffer, width, height,
+             ctx->x + eye_spacing/2 - 30, eye_y - 10,
+             ctx->x + eye_spacing/2 + 10, eye_y,
+             ctx->color, ctx->line_width);
+    
+    // 生气的嘴巴（大倒V形）
+    int16_t mouth_y = ctx->y + 40;
+    
+    draw_line(framebuffer, width, height,
+             ctx->x - 50, mouth_y,
+             ctx->x, mouth_y + 30,
+             ctx->color, ctx->line_width);
+    draw_line(framebuffer, width, height,
+             ctx->x, mouth_y + 30,
+             ctx->x + 50, mouth_y,
+             ctx->color, ctx->line_width);
+}
+
+// 修改惊讶表情
+static void draw_surprised_face(uint16_t* framebuffer, uint16_t width, uint16_t height,
+                               emotion_context_t* ctx, bool blinking) {
+    // 大眼睛
+    int16_t eye_y = ctx->y - 40;
+    int16_t eye_radius = 25;  // 更大的眼睛
+    int16_t eye_spacing = 80;
+    
+    draw_circle(framebuffer, width, height,
+               ctx->x - eye_spacing/2, eye_y, eye_radius, ctx->color, true);
+    draw_circle(framebuffer, width, height,
+               ctx->x + eye_spacing/2, eye_y, eye_radius, ctx->color, true);
+    
+    // O形大嘴巴
+    int16_t mouth_y = ctx->y + 40;
+    int16_t mouth_radius = 30;
+    
+    draw_circle(framebuffer, width, height,
+               ctx->x, mouth_y, mouth_radius, ctx->color, false);
+}
+
+// 修改困倦表情
+static void draw_sleepy_face(uint16_t* framebuffer, uint16_t width, uint16_t height,
+                            emotion_context_t* ctx, bool blinking) {
+    // 半闭的眼睛（弧线）
+    int16_t eye_y = ctx->y - 40;
+    int16_t eye_radius = 15;
+    int16_t eye_spacing = 80;
+    
+    draw_arc(framebuffer, width, height,
+            ctx->x - eye_spacing/2, eye_y, eye_radius,
+            M_PI * 0.1, M_PI * 0.9, ctx->color, ctx->line_width);
+    draw_arc(framebuffer, width, height,
+            ctx->x + eye_spacing/2, eye_y, eye_radius,
+            M_PI * 0.1, M_PI * 0.9, ctx->color, ctx->line_width);
+    
+    // Zzz嘴巴（波浪线）
+    int16_t mouth_y = ctx->y + 40;
+    
+    // 绘制Z形
+    draw_line(framebuffer, width, height,
+             ctx->x - 40, mouth_y,
+             ctx->x + 40, mouth_y,
+             ctx->color, ctx->line_width);
+    draw_line(framebuffer, width, height,
+             ctx->x + 40, mouth_y,
+             ctx->x - 40, mouth_y + 20,
+             ctx->color, ctx->line_width);
+    draw_line(framebuffer, width, height,
+             ctx->x - 40, mouth_y + 20,
+             ctx->x + 40, mouth_y + 20,
+             ctx->color, ctx->line_width);
+}
+
+// 修改喜爱表情
+static void draw_loving_face(uint16_t* framebuffer, uint16_t width, uint16_t height,
+                            emotion_context_t* ctx, bool blinking) {
+    // 心形眼睛
+    int16_t eye_y = ctx->y - 40;
+    int16_t eye_spacing = 80;
+    
+    // 左心形
+    draw_arc(framebuffer, width, height,
+            ctx->x - eye_spacing/2 - 10, eye_y, 15,
+            M_PI * 0.5, M_PI * 1.5, ctx->color, ctx->line_width);
+    draw_arc(framebuffer, width, height,
+            ctx->x - eye_spacing/2 + 10, eye_y, 15,
+            M_PI * 1.5, M_PI * 2.5, ctx->color, ctx->line_width);
+    
+    // 右心形
+    draw_arc(framebuffer, width, height,
+            ctx->x + eye_spacing/2 - 10, eye_y, 15,
+            M_PI * 0.5, M_PI * 1.5, ctx->color, ctx->line_width);
+    draw_arc(framebuffer, width, height,
+            ctx->x + eye_spacing/2 + 10, eye_y, 15,
+            M_PI * 1.5, M_PI * 2.5, ctx->color, ctx->line_width);
+    
+    // 微笑的嘴巴
+    int16_t mouth_y = ctx->y + 40;
+    int16_t mouth_radius = 40;
+    
+    draw_arc(framebuffer, width, height,
+            ctx->x, mouth_y, mouth_radius,
+            M_PI * 0.3, M_PI * 0.7, ctx->color, ctx->line_width);
+}
+
+// 修改困惑表情
+static void draw_confused_face(uint16_t* framebuffer, uint16_t width, uint16_t height,
+                              emotion_context_t* ctx, bool blinking) {
+    // 不对称的眼睛
+    int16_t eye_y = ctx->y - 40;
+    int16_t eye_spacing = 80;
+    
+    // 左眼（正常）
+    draw_circle(framebuffer, width, height,
+               ctx->x - eye_spacing/2, eye_y, 20, ctx->color, true);
+    
+    // 右眼（斜线）
+    draw_line(framebuffer, width, height,
+             ctx->x + eye_spacing/2 - 15, eye_y - 10,
+             ctx->x + eye_spacing/2 + 15, eye_y + 10,
+             ctx->color, ctx->line_width);
+    
+    // 问号嘴巴
+    int16_t mouth_y = ctx->y + 40;
+    
+    // 绘制问号形状
+    draw_arc(framebuffer, width, height,
+            ctx->x, mouth_y - 10, 15,
+            M_PI * 0.2, M_PI * 1.8, ctx->color, ctx->line_width);
+    draw_line(framebuffer, width, height,
+             ctx->x, mouth_y + 5,
+             ctx->x, mouth_y + 20,
+             ctx->color, ctx->line_width);
+    draw_circle(framebuffer, width, height,
+               ctx->x, mouth_y + 25, 3, ctx->color, true);
+}
+
+// 修改大笑表情
+static void draw_laughing_face(uint16_t* framebuffer, uint16_t width, uint16_t height,
+                              emotion_context_t* ctx, bool blinking) {
+    // 眯起的眼睛（弧线）
+    int16_t eye_y = ctx->y - 40;
+    int16_t eye_spacing = 80;
+    
+    draw_arc(framebuffer, width, height,
+            ctx->x - eye_spacing/2, eye_y, 12,
+            M_PI * 0.1, M_PI * 0.9, ctx->color, ctx->line_width);
+    draw_arc(framebuffer, width, height,
+            ctx->x + eye_spacing/2, eye_y, 12,
+            M_PI * 0.1, M_PI * 0.9, ctx->color, ctx->line_width);
+    
+    // 大笑的嘴巴（大弧线）
+    int16_t mouth_y = ctx->y + 30;
+    int16_t mouth_radius = 50;
+    
+    draw_arc(framebuffer, width, height,
+            ctx->x, mouth_y, mouth_radius,
+            M_PI * 0.1, M_PI * 0.9, ctx->color, ctx->line_width);
+    
+    // 添加舌头效果
+    draw_arc(framebuffer, width, height,
+            ctx->x, mouth_y + 10, 20,
+            M_PI * 0.3, M_PI * 0.7, ctx->color, ctx->line_width);
+}
 // 其他表情的绘制函数类似，这里省略部分实现...
 
 // 表情系统初始化
@@ -295,14 +473,14 @@ esp_err_t emotion_set_current(emotion_type_t emotion) {
         ESP_LOGE(TAG, "Invalid emotion type: %d", emotion);
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     ESP_LOGI(TAG, "Setting emotion to: %s", emotion_configs[emotion].name);
-    
+
     g_emotion.target_emotion = emotion;
     g_emotion.animation_state = ANIMATION_TRANSITION;
     g_emotion.animation_timer = 0;
     g_emotion.emotion_start_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
-    
+
     return ESP_OK;
 }
 
@@ -322,104 +500,43 @@ void emotion_set_animation(animation_state_t state) {
 
 // 绘制表情到帧缓冲区
 void emotion_draw_to_buffer(uint16_t* framebuffer, uint16_t width, uint16_t height) {
-    // 清空表情区域（可选，如果背景需要清除）
-    // 这里我们假设调用者已经设置了背景
-    
+
     bool blinking = g_emotion.is_blinking && (g_emotion.blink_frame < 3);
-    
+
     // 根据当前表情类型调用相应的绘制函数
     switch (g_emotion.current_emotion) {
         case EMOTION_NEUTRAL:
             draw_neutral_face(framebuffer, width, height, &g_emotion.context, blinking);
             break;
-            
+
         case EMOTION_HAPPY:
             draw_happy_face(framebuffer, width, height, &g_emotion.context, blinking);
             break;
-            
+
         case EMOTION_SAD:
             draw_sad_face(framebuffer, width, height, &g_emotion.context, blinking);
             break;
-            
+
         case EMOTION_ANGRY:
-            // 绘制生气表情
-            draw_circle(framebuffer, width, height, 
-                       g_emotion.context.x, g_emotion.context.y, 
-                       g_emotion.context.size, g_emotion.context.color, false);
-            // 皱眉的眼睛
-            draw_line(framebuffer, width, height,
-                     g_emotion.context.x - g_emotion.context.size/3 - 5,
-                     g_emotion.context.y - g_emotion.context.size/4 - 5,
-                     g_emotion.context.x - g_emotion.context.size/3 + 15,
-                     g_emotion.context.y - g_emotion.context.size/4,
-                     g_emotion.context.color, g_emotion.context.line_width);
-            draw_line(framebuffer, width, height,
-                     g_emotion.context.x + g_emotion.context.size/3 - 15,
-                     g_emotion.context.y - g_emotion.context.size/4 - 5,
-                     g_emotion.context.x + g_emotion.context.size/3 + 5,
-                     g_emotion.context.y - g_emotion.context.size/4,
-                     g_emotion.context.color, g_emotion.context.line_width);
-            // 生气的嘴巴（倒V形）
-            draw_line(framebuffer, width, height,
-                     g_emotion.context.x - g_emotion.context.size/4,
-                     g_emotion.context.y + g_emotion.context.size/4,
-                     g_emotion.context.x,
-                     g_emotion.context.y + g_emotion.context.size/3,
-                     g_emotion.context.color, g_emotion.context.line_width);
-            draw_line(framebuffer, width, height,
-                     g_emotion.context.x,
-                     g_emotion.context.y + g_emotion.context.size/3,
-                     g_emotion.context.x + g_emotion.context.size/4,
-                     g_emotion.context.y + g_emotion.context.size/4,
-                     g_emotion.context.color, g_emotion.context.line_width);
+            draw_angry_face(framebuffer, width, height, &g_emotion.context, blinking);
             break;
-            
+
         case EMOTION_SURPRISED:
-            // 绘制惊讶表情
-            draw_circle(framebuffer, width, height,
-                       g_emotion.context.x, g_emotion.context.y,
-                       g_emotion.context.size, g_emotion.context.color, false);
-            // 大眼睛
-            draw_circle(framebuffer, width, height,
-                       g_emotion.context.x - g_emotion.context.size/3,
-                       g_emotion.context.y - g_emotion.context.size/4,
-                       g_emotion.context.size/8, g_emotion.context.color, true);
-            draw_circle(framebuffer, width, height,
-                       g_emotion.context.x + g_emotion.context.size/3,
-                       g_emotion.context.y - g_emotion.context.size/4,
-                       g_emotion.context.size/8, g_emotion.context.color, true);
-            // O形嘴巴
-            draw_circle(framebuffer, width, height,
-                       g_emotion.context.x,
-                       g_emotion.context.y + g_emotion.context.size/4,
-                       g_emotion.context.size/6, g_emotion.context.color, false);
+            draw_surprised_face(framebuffer, width, height, &g_emotion.context, blinking);
             break;
-            
+
         case EMOTION_SLEEPY:
-            // 绘制困倦表情
-            draw_circle(framebuffer, width, height,
-                       g_emotion.context.x, g_emotion.context.y,
-                       g_emotion.context.size, g_emotion.context.color, false);
-            // 半闭的眼睛
-            draw_arc(framebuffer, width, height,
-                    g_emotion.context.x - g_emotion.context.size/3,
-                    g_emotion.context.y - g_emotion.context.size/4,
-                    g_emotion.context.size/12,
-                    M_PI * 0.1, M_PI * 0.9, g_emotion.context.color, g_emotion.context.line_width);
-            draw_arc(framebuffer, width, height,
-                    g_emotion.context.x + g_emotion.context.size/3,
-                    g_emotion.context.y - g_emotion.context.size/4,
-                    g_emotion.context.size/12,
-                    M_PI * 0.1, M_PI * 0.9, g_emotion.context.color, g_emotion.context.line_width);
-            // Zzz嘴巴
-            draw_line(framebuffer, width, height,
-                     g_emotion.context.x - g_emotion.context.size/4,
-                     g_emotion.context.y + g_emotion.context.size/4,
-                     g_emotion.context.x + g_emotion.context.size/4,
-                     g_emotion.context.y + g_emotion.context.size/4,
-                     g_emotion.context.color, g_emotion.context.line_width);
+            draw_sleepy_face(framebuffer, width, height, &g_emotion.context, blinking);
             break;
-            
+
+        case EMOTION_LOVING:
+            draw_loving_face(framebuffer, width, height, &g_emotion.context, blinking);
+            break;
+
+        case EMOTION_CONFUSED:
+            draw_confused_face(framebuffer, width, height, &g_emotion.context, blinking);
+            break;
+
         case EMOTION_BLINKING:
             // 专门用于眨眼的动画状态
             if (g_emotion.blink_frame == 0) {
@@ -428,7 +545,7 @@ void emotion_draw_to_buffer(uint16_t* framebuffer, uint16_t width, uint16_t heig
                 draw_neutral_face(framebuffer, width, height, &g_emotion.context, true);
             }
             break;
-            
+
         default:
             // 默认绘制中性表情
             draw_neutral_face(framebuffer, width, height, &g_emotion.context, blinking);

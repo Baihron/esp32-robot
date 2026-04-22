@@ -12,6 +12,7 @@
 static const char *TAG = "DISPLAY_TASK";
 
 extern task_status_t g_tasks;
+extern volatile emotion_change_flag_t g_emotion_change_flag;
 
 // 显示任务配置
 volatile static struct {
@@ -95,8 +96,7 @@ static void display_task_func(void *arg)
     
     // 表情相关变量
     static uint32_t last_emotion_update = 0;
-    static uint32_t emotion_change_timer = 0;
-    static bool first_frame = true;
+    static emotion_type_t current_emotion = EMOTION_NEUTRAL;
 
     // 主循环
     while (1) {
@@ -113,13 +113,15 @@ static void display_task_func(void *arg)
                 ESP_LOGI(TAG, "Recovered framebuffer at %p", g_display_task.framebuffer);
             }
 
+            ESP_LOGI(TAG, "display_running Current state NULL");
             // 获取当前系统状态
             system_state_t current_state = state_manager_get_state();
 
             // 根据系统状态决定显示内容
             if (current_state == STATE_UNLOCKED) {
+                ESP_LOGI(TAG, "display_running Current state STATE_UNLOCKED");
                 // 解锁状态：显示表情
-                
+
                 // 更新表情动画
                 uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
                 if (last_emotion_update == 0) {
@@ -130,17 +132,63 @@ static void display_task_func(void *arg)
                 
                 emotion_update_animation(elapsed);
                 
-                // 随机切换表情（每10-30秒）
-                emotion_change_timer += elapsed;
-                if (emotion_change_timer >= 10000) { // 10秒
-                    emotion_change_timer = 0;
+                // 检查是否有表情转换标志
+                if (g_emotion_change_flag != EMOTION_FLAG_NEUTRAL) {
+                    ESP_LOGI(TAG, "Emotion change flag detected: %d", g_emotion_change_flag);
                     
-                    // 随机选择表情（排除眨眼动画）
-                    emotion_type_t random_emotion = (rand() % (EMOTION_COUNT - 2)) + 1;
-                    emotion_set_current(random_emotion);
+                    emotion_type_t new_emotion = EMOTION_NEUTRAL;
                     
-                    ESP_LOGI(TAG, "Random emotion change to: %s", 
-                            emotion_get_name(random_emotion));
+                    if (g_emotion_change_flag == EMOTION_FLAG_RANDOM) {
+                        // 随机选择一个表情（排除中性、眨眼和当前表情）
+                        do {
+                            new_emotion = (rand() % (EMOTION_COUNT - 2)) + 1; // 排除中性(0)和眨眼(8)
+                        } while (new_emotion == current_emotion);
+                        
+                        ESP_LOGI(TAG, "Random emotion selected: %s", emotion_get_name(new_emotion));
+                    } else {
+                        // 根据标志设置特定表情
+                        switch (g_emotion_change_flag) {
+                            case EMOTION_FLAG_HAPPY:
+                                new_emotion = EMOTION_HAPPY;
+                                break;
+                            case EMOTION_FLAG_SAD:
+                                new_emotion = EMOTION_SAD;
+                                break;
+                            case EMOTION_FLAG_ANGRY:
+                                new_emotion = EMOTION_ANGRY;
+                                break;
+                            case EMOTION_FLAG_SURPRISED:
+                                new_emotion = EMOTION_SURPRISED;
+                                break;
+                            case EMOTION_FLAG_SLEEPY:
+                                new_emotion = EMOTION_SLEEPY;
+                                break;
+                            case EMOTION_FLAG_LOVING:
+                                new_emotion = EMOTION_LOVING;
+                                break;
+                            case EMOTION_FLAG_CONFUSED:
+                                new_emotion = EMOTION_CONFUSED;
+                                break;
+                            case EMOTION_FLAG_LAUGHING:
+                                new_emotion = EMOTION_LAUGHING;
+                                break;
+                            case EMOTION_FLAG_BLINKING:
+                                new_emotion = EMOTION_BLINKING;
+                                break;
+                            default:
+                                new_emotion = EMOTION_NEUTRAL;
+                                break;
+                        }
+                    }
+                    
+                    // 设置新表情
+                    emotion_set_current(new_emotion);
+                    current_emotion = new_emotion;
+
+                    // 重置标志
+                    g_emotion_change_flag = EMOTION_FLAG_NEUTRAL;
+                    
+                    ESP_LOGI(TAG, "Emotion changed to: %s", emotion_get_name(new_emotion));
                 }
 
                 int total_pixels = g_display_task.width * g_display_task.height;
@@ -170,10 +218,10 @@ static void display_task_func(void *arg)
 
             } else if (current_state == STATE_LOCKED) {
                 // 锁定状态：显示锁定界面
-                // 清屏为灰色
+                ESP_LOGI(TAG, "display_running Current state STATE_LOCKED");
                 int total_pixels = g_display_task.width * g_display_task.height;
                 for (int i = 0; i < total_pixels; i++) {
-                    g_display_task.framebuffer[i] = 0xFFFF; // 灰色
+                    g_display_task.framebuffer[i] = 0xFFFF;
                 }
 
                 // 刷新显示
@@ -186,7 +234,7 @@ static void display_task_func(void *arg)
                 for (int i = 0; i < total_pixels; i++) {
                     g_display_task.framebuffer[i] = 0x0000;
                 }
-
+                ESP_LOGI(TAG, "display_running Current state STATE_ELSE");
                 vTaskDelay(pdMS_TO_TICKS(2));
                 flush_display();
                 vTaskDelay(pdMS_TO_TICKS(10));

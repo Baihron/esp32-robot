@@ -8,6 +8,7 @@ static const char *TAG = "BUTTON_TASK";
 
 // 按钮状态变量
 static button_state_t button_state[BUTTON_MAX] = {0};
+volatile emotion_change_flag_t g_emotion_change_flag;
 
 // 按钮事件处理
 static void button_event_handler(button_id_t button_id, button_event_t event, void* user_data) 
@@ -29,6 +30,14 @@ static void button_event_handler(button_id_t button_id, button_event_t event, vo
         case BUTTON_EVENT_SINGLE_CLICK:
             ESP_LOGI(TAG, "Button %d single click", button_id);
             button_state[button_id] = BUTTON_STATE_CLICKED;
+
+            // 处理状态机事件
+            if (button_id == BUTTON_BOOT) {
+                system_state_t current_state = state_manager_get_state();
+                if (current_state == STATE_UNLOCKED) {
+                    g_emotion_change_flag = EMOTION_FLAG_RANDOM;
+                }
+            }
             break;
             
         case BUTTON_EVENT_DOUBLE_CLICK:

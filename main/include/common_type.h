@@ -44,8 +44,24 @@ typedef enum {
     EVENT_UNLOCK_SUCCESS,   // 解锁成功
     EVENT_START_ENROLL,     // 开始人脸录入（按钮双击）
     EVENT_ENROLL_COMPLETE,  // 人脸录入完成
-    EVENT_ENROLL_CANCEL     // 人脸录入取消
+    EVENT_ENROLL_CANCEL,    // 人脸录入取消
+    EVENT_EMOTION_CHANGE    // 表情切换
 } system_event_t;
+
+// 表情变化标志（与emotion_type_t保持一致）
+typedef enum {
+    EMOTION_FLAG_NEUTRAL = 0,     // 中性
+    EMOTION_FLAG_HAPPY,           // 开心
+    EMOTION_FLAG_SAD,             // 悲伤
+    EMOTION_FLAG_ANGRY,           // 生气
+    EMOTION_FLAG_SURPRISED,       // 惊讶
+    EMOTION_FLAG_SLEEPY,          // 困倦
+    EMOTION_FLAG_LOVING,          // 喜爱
+    EMOTION_FLAG_CONFUSED,        // 困惑
+    EMOTION_FLAG_BLINKING,        // 眨眼
+    EMOTION_FLAG_LAUGHING,        // 大笑
+    EMOTION_FLAG_RANDOM = 255     // 随机表情
+} emotion_change_flag_t;
 
 #ifdef __cplusplus
 }
