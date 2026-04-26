@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include "eye_tracking.h"
 
 static const char *TAG = "DISPLAY_TASK";
 
@@ -93,7 +94,10 @@ static void display_task_func(void *arg)
     } else {
         ESP_LOGI(TAG, "Emotion system initialized");
     }
-    
+
+    // 初始化视线追踪
+    eye_tracking_init(NULL);  // 使用默认配置
+
     // 表情相关变量
     static uint32_t last_emotion_update = 0;
     static emotion_type_t current_emotion = EMOTION_NEUTRAL;
@@ -113,13 +117,12 @@ static void display_task_func(void *arg)
                 ESP_LOGI(TAG, "Recovered framebuffer at %p", g_display_task.framebuffer);
             }
 
-            ESP_LOGI(TAG, "display_running Current state NULL");
             // 获取当前系统状态
             system_state_t current_state = state_manager_get_state();
 
             // 根据系统状态决定显示内容
             if (current_state == STATE_UNLOCKED) {
-                ESP_LOGI(TAG, "display_running Current state STATE_UNLOCKED");
+                // ESP_LOGI(TAG, "display_running Current state STATE_UNLOCKED");
                 // 解锁状态：显示表情
 
                 // 更新表情动画
@@ -218,7 +221,7 @@ static void display_task_func(void *arg)
 
             } else if (current_state == STATE_LOCKED) {
                 // 锁定状态：显示锁定界面
-                ESP_LOGI(TAG, "display_running Current state STATE_LOCKED");
+                // ESP_LOGI(TAG, "display_running Current state STATE_LOCKED");
                 int total_pixels = g_display_task.width * g_display_task.height;
                 for (int i = 0; i < total_pixels; i++) {
                     g_display_task.framebuffer[i] = 0xFFFF;

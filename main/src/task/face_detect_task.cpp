@@ -7,6 +7,7 @@
 #include "display_task.h"
 #include "fs_driver.h"
 #include "flash_driver.h"
+#include "eye_tracking.h"
 
 // esp-dl 相关头文件
 #include "human_face_detect.hpp"
@@ -149,6 +150,20 @@ static void process_face_detect(void)
                 max_score = it->score;
             }
 
+            if (it->score >= FACE_DETECTION_THRESHOLD) {
+            // 计算人脸中心
+                float face_center_x = (it->box[0] + it->box[2]) / 2.0f;
+                float face_center_y = (it->box[1] + it->box[3]) / 2.0f;
+                float face_width = it->box[2] - it->box[0];
+                float face_height = it->box[3] - it->box[1];
+                
+                // 更新视线追踪（假设屏幕尺寸240x240）
+                uint32_t timestamp = esp_timer_get_time() / 1000; // 转换为毫秒
+                eye_tracking_update_face_position(face_center_x, face_center_y, 
+                                                face_width, face_height,
+                                                timestamp);
+            }
+
             ESP_LOGI(TAG_FACE, "Face %d: Score=%.3f, Box=[%d,%d,%d,%d]", face_count, it->score, it->box[0], it->box[1], it->box[2], it->box[3]);
         }
 
@@ -247,15 +262,26 @@ static void face_app_task(void *arg)
             //     continue;
             // }
 
+            // 检查是否长时间没有检测到人脸
+            static uint32_t last_detection_time = 0;
+            uint32_t current_time = esp_timer_get_time() / 1000;
+            
+            if (last_detection_time > 0 && 
+                current_time - last_detection_time > 1000) { // 1秒没检测到
+                // 重置视线追踪，让眼睛回到中心
+                eye_tracking_reset();
+            }
+
             if(!g_tasks.face_recognition_running) {
                 process_face_detect();
+                last_detection_time = current_time;
             } else {
 #ifdef CONFIG_DEBUG_PRINT
                 ESP_LOGI(TAG_FACE, "人脸识别任务正在运行，请勿重复操作");
 #endif
             }
         }
-        
+
         // 短延迟
         vTaskDelay(pdMS_TO_TICKS(50));
     }

@@ -13,6 +13,7 @@ idf_component_register(
         "src/utils/system_init.c"
 
         "src/emotion/emotion_system.c"
+        "src/emotion/eye_tracking.c"
 
     INCLUDE_DIRS    "include"
         "include/emotion"
