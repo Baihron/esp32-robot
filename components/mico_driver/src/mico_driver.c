@@ -5,9 +5,15 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <string.h>
 
 static const char *TAG = "MICO_DRIVER";
 static i2s_chan_handle_t rx_handle = NULL;   // I2S 接收通道句柄
+
+// 内部缓冲区：缓存 I2S 读取的多余数据
+#define CACHE_BUFFER_SIZE   8192   // 8KB 缓存，足够容纳几次 DMA 数据
+static uint8_t s_cache[CACHE_BUFFER_SIZE];
+static size_t s_cache_len = 0;      // 缓存中有效数据长度
 
 esp_err_t mico_driver_init(void) {
     ESP_LOGI(TAG, "Initializing INMP441 microphone (I2S standard mode)");
@@ -72,29 +78,60 @@ esp_err_t mico_driver_init(void) {
     return ESP_OK;
 }
 
-esp_err_t mico_driver_read(int16_t *buf, size_t buf_size, size_t *bytes_read) {
+esp_err_t mico_driver_read(int16_t *buf, size_t buf_size, size_t *bytes_read)
+{
     if (!rx_handle) {
         ESP_LOGE(TAG, "Microphone not initialized");
         return ESP_ERR_INVALID_STATE;
     }
 
-    // 临时缓冲区，存储原始 32-bit 数据
-    uint32_t raw_samples[buf_size / sizeof(uint32_t)];
-    size_t raw_bytes = 0;
-    esp_err_t ret = i2s_channel_read(rx_handle, raw_samples, buf_size, &raw_bytes, portMAX_DELAY);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "I2S read failed: %s", esp_err_to_name(ret));
-        return ret;
+    size_t total_copied = 0;
+    uint8_t *out_ptr = (uint8_t*)buf;
+
+    while (total_copied < buf_size) {
+        // 1. 优先从缓存中取数据
+        if (s_cache_len > 0) {
+            size_t copy_now = (buf_size - total_copied) < s_cache_len ? (buf_size - total_copied) : s_cache_len;
+            memcpy(out_ptr + total_copied, s_cache, copy_now);
+            // 移动缓存剩余数据到头部
+            memmove(s_cache, s_cache + copy_now, s_cache_len - copy_now);
+            s_cache_len -= copy_now;
+            total_copied += copy_now;
+            continue;
+        }
+
+        // 2. 缓存为空，从 I2S 读取一大块数据
+        // 一次读取至少 buf_size 的 4 倍，但不超过 CACHE_BUFFER_SIZE
+        size_t i2s_read_bytes = buf_size * 4;
+        if (i2s_read_bytes > CACHE_BUFFER_SIZE) {
+            i2s_read_bytes = CACHE_BUFFER_SIZE;
+        }
+        if (i2s_read_bytes < 1024) i2s_read_bytes = 1024;  // 至少 1KB
+
+        uint32_t raw_samples[i2s_read_bytes / sizeof(uint32_t)];
+        size_t raw_bytes = 0;
+        esp_err_t ret = i2s_channel_read(rx_handle, raw_samples, i2s_read_bytes, &raw_bytes, portMAX_DELAY);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "I2S read failed: %s", esp_err_to_name(ret));
+            return ret;
+        }
+
+        // 转换 32-bit 到 16-bit，存入缓存
+        size_t sample_cnt = raw_bytes / sizeof(uint32_t);
+        size_t converted_bytes = sample_cnt * sizeof(int16_t);
+        if (converted_bytes > CACHE_BUFFER_SIZE) {
+            ESP_LOGW(TAG, "I2S returned too much data, truncating to %d", CACHE_BUFFER_SIZE);
+            converted_bytes = CACHE_BUFFER_SIZE;
+            sample_cnt = converted_bytes / sizeof(int16_t);
+        }
+
+        for (size_t i = 0; i < sample_cnt; i++) {
+            ((int16_t*)s_cache)[i] = (int16_t)(raw_samples[i] >> 16);
+        }
+        s_cache_len = converted_bytes;
     }
 
-    // 转换：32-bit 原始数据 -> 提取 24-bit 有效数据 -> 右移 8 位得到 16-bit
-    size_t sample_cnt = raw_bytes / sizeof(uint32_t);
-    for (size_t i = 0; i < sample_cnt; i++) {
-        // 这里统一右移 16 位转为 16-bit
-        buf[i] = (int16_t)(raw_samples[i] >> 16);
-    }
-
-    *bytes_read = sample_cnt * sizeof(int16_t);
+    *bytes_read = total_copied;
     return ESP_OK;
 }
 

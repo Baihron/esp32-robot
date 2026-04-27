@@ -76,6 +76,15 @@ static void system_monitor_task(void)
     }
 }
 
+static void voice_init_task(void *arg)
+{
+    esp_err_t ret = voice_chat_task_init();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Voice chat init failed: %s", esp_err_to_name(ret));
+    }
+    vTaskDelete(NULL);  // 初始化完就删除自己
+}
+
 void app_main(void)
 {
     ESP_LOGI(TAG, "Starting Black Camera System...");
@@ -90,10 +99,7 @@ void app_main(void)
     }
 
     // 3. 初始化语音聊天任务（自动检测声音）
-    ret = voice_chat_task_init();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Voice chat task init failed: %s", esp_err_to_name(ret));
-    }
+    xTaskCreate(&voice_init_task, "voice_init", 16384, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "Voice chat main task created");
 

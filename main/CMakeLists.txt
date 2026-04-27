@@ -35,6 +35,7 @@ idf_component_register(
     REQUIRES protocols
     REQUIRES esp_websocket_client
     REQUIRES esp_http_client
+    REQUIRES mbedtls
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE "-fexceptions")

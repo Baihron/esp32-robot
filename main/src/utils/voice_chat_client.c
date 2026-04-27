@@ -1,275 +1,268 @@
 #include "voice_chat_client.h"
 #include "esp_log.h"
 #include "esp_websocket_client.h"
-#include "esp_http_client.h"
+#include "esp_crt_bundle.h"
 #include "cJSON.h"
+#include "mbedtls/base64.h"
+#include "mbedtls/ssl.h"
+#include "mbedtls/net_sockets.h"
+#include "mbedtls/error.h"
+#include "mbedtls/entropy.h"
+#include "mbedtls/ctr_drbg.h"
 #include <string.h>
 #include <stdlib.h>
-#include "mbedtls/base64.h"
-#include "esp_crt_bundle.h"
 
 static const char *TAG = "BAIDU_LLM";
 
-// ==================== 固定配置 ====================
-#define BAIDU_TOKEN_URL        "https://aip.baidubce.com/oauth/2.0/token"
-#define BAIDU_WS_URL_BASE     "wss://aip.baidubce.com/ws/2.0/speech/v1/realtime"
+#define BAIDU_TOKEN_HOST        "aip.baidubce.com"
+#define BAIDU_TOKEN_PATH        "/oauth/2.0/token"
+#define BAIDU_WS_URL            "wss://aip.baidubce.com/ws/2.0/speech/v1/realtime"
 
-// ==================== 全局状态 ====================
+// 全局变量
 static esp_websocket_client_handle_t g_ws = NULL;
 static bool g_connected = false;
-static char g_access_token[256] = {0};          // token 最长 256
-static char g_full_url[512] = {0};
-
-// 接收缓冲区
+static char g_access_token[256] = {0};
 static int16_t *g_recv_buf = NULL;
 static size_t g_recv_len = 0;
 static size_t g_recv_max = 0;
 static bool g_recv_done = false;
 static TaskHandle_t g_wait_task = NULL;
 
-// ==================== 工具函数 ====================
-
-/**
- * @brief 获取百度 access_token
- * 需要填入 BAIDU_API_KEY 和 BAIDU_SECRET_KEY
- */
-static esp_err_t baidu_get_access_token(void) {
-    if (g_access_token[0] != '\0') return ESP_OK;
-
-    char post_data[512];
-    snprintf(post_data, sizeof(post_data),
-             "grant_type=client_credentials&client_id=%s&client_secret=%s",
-             BAIDU_API_KEY, BAIDU_SECRET_KEY);
-
-    esp_http_client_config_t config = {
-        .url = BAIDU_TOKEN_URL,
-        .method = HTTP_METHOD_POST,
-        .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
-    };
-
-    esp_http_client_handle_t client = esp_http_client_init(&config);
-
-    esp_http_client_set_post_field(client, post_data, strlen(post_data));
-    esp_http_client_set_header(client, "Content-Type", "application/x-www-form-urlencoded");
-    // 关键：让服务器关闭连接，便于我们读取到 EOF
-    esp_http_client_set_header(client, "Connection", "close");
-
-    esp_err_t err = esp_http_client_perform(client);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "❌ HTTP请求失败: %s", esp_err_to_name(err));
-        esp_http_client_cleanup(client);
-        return err;
-    }
-
-    int status = esp_http_client_get_status_code(client);
-    ESP_LOGI(TAG, "📡 Token请求 HTTP状态码: %d", status);
-
-    // 动态分配缓冲区，循环读取直到读完所有数据
-    size_t buf_size = 1024;
-    char *response = malloc(buf_size);
-    if (!response) {
-        esp_http_client_cleanup(client);
-        return ESP_ERR_NO_MEM;
-    }
-
-    int total_read = 0;
-    while (1) {
-        if (total_read + 1 >= buf_size) {
-            buf_size *= 2;
-            char *tmp = realloc(response, buf_size);
-            if (!tmp) {
-                free(response);
-                esp_http_client_cleanup(client);
-                return ESP_ERR_NO_MEM;
-            }
-            response = tmp;
-        }
-        int read_len = esp_http_client_read(client, response + total_read, buf_size - total_read - 1);
-        if (read_len <= 0) {
-            break;      // 读取结束或出错
-        }
-        total_read += read_len;
-    }
-
-    response[total_read] = '\0';
-    ESP_LOGI(TAG, "📡 读取响应字节数: %d", total_read);
-    if (total_read > 0) {
-        ESP_LOGI(TAG, "📡 服务器响应: %s", response);
-    } else {
-        ESP_LOGW(TAG, "📡 服务器返回空响应体");
-    }
-
-    if (status != 200) {
-        ESP_LOGE(TAG, "❌ 获取 token 失败 (HTTP %d)", status);
-        free(response);
-        esp_http_client_cleanup(client);
-        return ESP_FAIL;
-    }
-
-    cJSON *root = cJSON_Parse(response);
-    if (root) {
-        cJSON *token = cJSON_GetObjectItem(root, "access_token");
-        if (token && cJSON_IsString(token)) {
-            strncpy(g_access_token, token->valuestring, sizeof(g_access_token) - 1);
-            g_access_token[sizeof(g_access_token) - 1] = '\0';
-            ESP_LOGI(TAG, "✅ 获取 access_token 成功");
-        } else {
-            ESP_LOGE(TAG, "❌ 响应中没有 access_token");
-            err = ESP_FAIL;
-        }
-        cJSON_Delete(root);
-    } else {
-        ESP_LOGE(TAG, "❌ JSON解析失败: %s", response);
-        err = ESP_FAIL;
-    }
-
-    free(response);
-    esp_http_client_cleanup(client);
-    return (g_access_token[0] != '\0') ? ESP_OK : ESP_FAIL;
-}
-
-/* base64 编码 */
-static int base64_encode(const uint8_t *src, size_t slen, char *dst, size_t dlen) {
-    size_t olen;
-    int ret = mbedtls_base64_encode((unsigned char *)dst, dlen, &olen, src, slen);
-    return (ret == 0) ? (int)olen : -1;
-}
-
-/* base64 解码 */
-static int base64_decode(const char *src, size_t slen, uint8_t *dst, size_t dlen) {
-    size_t olen;
-    int ret = mbedtls_base64_decode((unsigned char *)dst, dlen, &olen, (const unsigned char *)src, slen);
-    return (ret == 0) ? (int)olen : -1;
-}
-
-// ==================== WebSocket 发送函数 ====================
-
-static esp_err_t ws_send_text(const char *json) {
+static esp_err_t ws_send_text(const char *json)
+{
     if (!g_connected) return ESP_ERR_INVALID_STATE;
     int ret = esp_websocket_client_send_text(g_ws, json, strlen(json), pdMS_TO_TICKS(3000));
     return ret < 0 ? ESP_FAIL : ESP_OK;
 }
 
-static esp_err_t ws_send_bin(const uint8_t *data, size_t len) {
-    if (!g_connected) return ESP_ERR_INVALID_STATE;
-    int ret = esp_websocket_client_send_bin(g_ws, (const char *)data, len, pdMS_TO_TICKS(3000));
-    return ret < 0 ? ESP_FAIL : ESP_OK;
+// ---------- 获取 access_token ----------
+static esp_err_t baidu_get_access_token(void)
+{
+    if (g_access_token[0] != '\0') return ESP_OK;
+
+    char post_body[512];
+    snprintf(post_body, sizeof(post_body),
+             "grant_type=client_credentials&client_id=%s&client_secret=%s",
+             BAIDU_API_KEY, BAIDU_SECRET_KEY);
+
+    mbedtls_net_context server_fd;
+    mbedtls_ssl_context ssl;
+    mbedtls_ssl_config conf;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_entropy_context entropy;
+
+    mbedtls_net_init(&server_fd);
+    mbedtls_ssl_init(&ssl);
+    mbedtls_ssl_config_init(&conf);
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+    mbedtls_entropy_init(&entropy);
+
+    int ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, NULL, 0);
+    if (ret) { ESP_LOGE(TAG, "drbg_seed err -0x%x", -ret); goto exit; }
+
+    ret = mbedtls_net_connect(&server_fd, BAIDU_TOKEN_HOST, "443", MBEDTLS_NET_PROTO_TCP);
+    if (ret) { ESP_LOGE(TAG, "connect err -0x%x", -ret); goto exit; }
+
+    ret = mbedtls_ssl_config_defaults(&conf,
+                                      MBEDTLS_SSL_IS_CLIENT,
+                                      MBEDTLS_SSL_TRANSPORT_STREAM,
+                                      MBEDTLS_SSL_PRESET_DEFAULT);
+    if (ret) { ESP_LOGE(TAG, "config_defaults err -0x%x", -ret); goto exit; }
+
+    esp_crt_bundle_attach(&conf);
+
+    mbedtls_ssl_conf_rng(&conf, mbedtls_ctr_drbg_random, &ctr_drbg);
+    ret = mbedtls_ssl_setup(&ssl, &conf);
+    if (ret) { ESP_LOGE(TAG, "ssl_setup err -0x%x", -ret); goto exit; }
+    ret = mbedtls_ssl_set_hostname(&ssl, BAIDU_TOKEN_HOST);
+    if (ret) { ESP_LOGE(TAG, "set_hostname err -0x%x", -ret); goto exit; }
+    mbedtls_ssl_set_bio(&ssl, &server_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
+
+    while ((ret = mbedtls_ssl_handshake(&ssl)) != 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            ESP_LOGE(TAG, "handshake err -0x%x", -ret);
+            goto exit;
+        }
+    }
+
+    char request[1024];
+    snprintf(request, sizeof(request),
+             "POST %s HTTP/1.1\r\n"
+             "Host: %s\r\n"
+             "Content-Type: application/x-www-form-urlencoded\r\n"
+             "Content-Length: %d\r\n"
+             "Connection: close\r\n"
+             "\r\n"
+             "%s",
+             BAIDU_TOKEN_PATH, BAIDU_TOKEN_HOST, (int)strlen(post_body), post_body);
+
+    while ((ret = mbedtls_ssl_write(&ssl, (const unsigned char *)request, strlen(request))) <= 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ && ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            ESP_LOGE(TAG, "write err -0x%x", -ret);
+            goto exit;
+        }
+    }
+
+    size_t cap = 1024;
+    char *response = malloc(cap);
+    if (!response) { ret = -1; goto exit; }
+    int total = 0;
+    while (1) {
+        if (total + 1 >= cap) {
+            cap *= 2;
+            char *tmp = realloc(response, cap);
+            if (!tmp) { free(response); ret = -1; goto exit; }
+            response = tmp;
+        }
+        ret = mbedtls_ssl_read(&ssl, (unsigned char *)(response + total), cap - total - 1);
+        if (ret <= 0) break;
+        total += ret;
+    }
+    response[total] = '\0';
+    ESP_LOGI(TAG, "Response total %d bytes", total);
+
+    const char *body = strstr(response, "\r\n\r\n");
+    if (body) {
+        body += 4;
+        const char *json_start = strchr(body, '{');
+        if (json_start) {
+            ESP_LOGI(TAG, "Token JSON: %.200s...", json_start);
+            cJSON *root = cJSON_Parse(json_start);
+            if (root) {
+                cJSON *tok = cJSON_GetObjectItem(root, "access_token");
+                if (tok && cJSON_IsString(tok)) {
+                    strncpy(g_access_token, tok->valuestring, sizeof(g_access_token) - 1);
+                    g_access_token[sizeof(g_access_token) - 1] = '\0';
+                    ESP_LOGI(TAG, "✅ access_token: %.10s...", g_access_token);
+                } else {
+                    ESP_LOGE(TAG, "access_token not found in JSON");
+                }
+                cJSON_Delete(root);
+            } else {
+                ESP_LOGE(TAG, "Invalid JSON");
+            }
+        } else {
+            ESP_LOGE(TAG, "No JSON body in response");
+        }
+    } else {
+        ESP_LOGE(TAG, "No HTTP body in response");
+    }
+    free(response);
+
+exit:
+    mbedtls_ssl_close_notify(&ssl);
+    mbedtls_net_free(&server_fd);
+    mbedtls_ssl_free(&ssl);
+    mbedtls_ssl_config_free(&conf);
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+    mbedtls_entropy_free(&entropy);
+
+    return (g_access_token[0] != '\0') ? ESP_OK : ESP_FAIL;
 }
 
-// ==================== WebSocket 事件处理 ====================
-
-static void ws_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data) {
+// ---------- WebSocket 事件处理（已修复 use-after-free） ----------
+static void ws_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
+{
     esp_websocket_event_data_t *ed = (esp_websocket_event_data_t *)data;
 
     if (id == WEBSOCKET_EVENT_CONNECTED) {
-        ESP_LOGI(TAG, "✅ WebSocket 已连接");
+        ESP_LOGI(TAG, "✅ WebSocket connected");
         g_connected = true;
-    }
-    else if (id == WEBSOCKET_EVENT_DISCONNECTED) {
-        ESP_LOGW(TAG, "❌ 断开连接");
+    } else if (id == WEBSOCKET_EVENT_DISCONNECTED) {
+        ESP_LOGW(TAG, "❌ WebSocket disconnected");
         g_connected = false;
-        // 如果还在等待回复，提前唤醒
-        if (g_wait_task) {
-            g_recv_done = true;
-            xTaskNotifyGive(g_wait_task);
-        }
-    }
-    else if (id == WEBSOCKET_EVENT_DATA && ed->op_code == 0x2) {
-        // 二进制帧 (本接口一般不会用到，保留)
-        ESP_LOGW(TAG, "⚠️ 收到意外的二进制帧, length=%d", ed->data_len);
-    }
-    else if (id == WEBSOCKET_EVENT_DATA && ed->op_code == 0x1) {
-        // 文本JSON事件
+        TaskHandle_t task = g_wait_task;
+        g_wait_task = NULL;
+        if (task) xTaskNotifyGive(task);
+    } else if (id == WEBSOCKET_EVENT_DATA && ed->op_code == 0x1) {
         char json[2048];
-        size_t cpy_len = ed->data_len < sizeof(json) - 1 ? ed->data_len : sizeof(json) - 1;
-        memcpy(json, ed->data_ptr, cpy_len);
-        json[cpy_len] = '\0';
-        ESP_LOGD(TAG, "📩 收到事件: %s", json);
+        size_t len = ed->data_len < sizeof(json) - 1 ? ed->data_len : sizeof(json) - 1;
+        memcpy(json, ed->data_ptr, len);
+        json[len] = '\0';
 
         cJSON *root = cJSON_Parse(json);
         if (!root) return;
 
         cJSON *type = cJSON_GetObjectItem(root, "type");
-        if (!type || !cJSON_IsString(type)) {
-            cJSON_Delete(root);
-            return;
-        }
+        if (type && cJSON_IsString(type)) {
+            const char *event = type->valuestring;
+            ESP_LOGI(TAG, "WS event: %s", event);
 
-        const char *event = type->valuestring;
-
-        if (strcmp(event, "session.created") == 0) {
-            // 会话已创建，可以发送音频了
-            ESP_LOGI(TAG, "✅ 会话已创建");
-        }
-        else if (strcmp(event, "response.audio.delta") == 0) {
-            // 收到一段合成语音 (base64)
-            cJSON *delta = cJSON_GetObjectItem(root, "delta");
-            if (delta && cJSON_IsString(delta)) {
-                const char *b64 = delta->valuestring;
-                size_t b64_len = strlen(b64);
-                // 估算解码后大小
-                size_t dec_len = (b64_len * 3) / 4 + 4;
-                if (g_recv_buf && g_recv_len + dec_len <= g_recv_max) {
-                    int written = base64_decode(b64, b64_len,
-                                               (uint8_t *)(g_recv_buf) + g_recv_len,
-                                               g_recv_max - g_recv_len);
-                    if (written > 0) {
-                        g_recv_len += written;
-                        ESP_LOGD(TAG, "🎵 收到音频片段, size=%d, total=%zu", written, g_recv_len);
+            if (strcmp(event, "response.audio.delta") == 0) {
+                // 如果已经没有接收缓冲区，直接丢弃
+                if (g_recv_buf == NULL) {
+                    ESP_LOGW(TAG, "Audio delta ignored: no recv buffer");
+                    cJSON_Delete(root);
+                    return;
+                }
+                cJSON *delta = cJSON_GetObjectItem(root, "delta");
+                if (delta && cJSON_IsString(delta)) {
+                    const char *b64 = delta->valuestring;
+                    size_t b64_len = strlen(b64);
+                    size_t max_dec = (b64_len * 3) / 4 + 4;
+                    if (g_recv_len + max_dec <= g_recv_max) {
+                        size_t olen = 0;
+                        int ret = mbedtls_base64_decode(
+                            (unsigned char *)g_recv_buf + g_recv_len,
+                            g_recv_max - g_recv_len, &olen,
+                            (const unsigned char *)b64, b64_len);
+                        if (ret == 0) {
+                            g_recv_len += olen;
+                            ESP_LOGI(TAG, "Audio delta: %d bytes (total %d)", olen, g_recv_len);
+                        } else {
+                            ESP_LOGE(TAG, "base64 decode error: %d", ret);
+                        }
                     } else {
-                        ESP_LOGE(TAG, "❌ base64解码失败");
+                        ESP_LOGE(TAG, "Audio buffer overflow! need %d, have %d", max_dec, g_recv_max - g_recv_len);
                     }
+                }
+            } else if (strcmp(event, "response.done") == 0) {
+                TaskHandle_t task = g_wait_task;
+                g_wait_task = NULL;
+                g_recv_buf = NULL;   // 防止后续写入
+                if (task) {
+                    xTaskNotifyGive(task);
+                }
+            } else if (strcmp(event, "error") == 0) {
+                TaskHandle_t task = g_wait_task;
+                g_wait_task = NULL;
+                g_recv_buf = NULL;
+                if (task) {
+                    xTaskNotifyGive(task);
+                }
+                // 打印完整的错误 JSON
+                ESP_LOGE(TAG, "❌ Server error event received");
+                cJSON *error_copy = cJSON_Duplicate(root, 1);
+                if (error_copy) {
+                    char *error_str = cJSON_Print(error_copy);
+                    ESP_LOGE(TAG, "Full error JSON:\n%s", error_str);
+                    free(error_str);
+                    cJSON_Delete(error_copy);
                 } else {
-                    ESP_LOGE(TAG, "❌ 接收缓冲区不足");
+                    ESP_LOGE(TAG, "Error raw JSON: %.*s", (int)len, json);
                 }
             }
         }
-        else if (strcmp(event, "response.done") == 0) {
-            ESP_LOGI(TAG, "✅ 本轮对话完成");
-            g_recv_done = true;
-            if (g_wait_task) {
-                xTaskNotifyGive(g_wait_task);
-            }
-        }
-        else if (strcmp(event, "error") == 0) {
-            // 处理错误
-            cJSON *error = cJSON_GetObjectItem(root, "error");
-            if (error) {
-                char *err_str = cJSON_PrintUnformatted(error);
-                ESP_LOGE(TAG, "❌ 服务端错误: %s", err_str);
-                free(err_str);
-            }
-            g_recv_done = true;
-            if (g_wait_task) {
-                xTaskNotifyGive(g_wait_task);
-            }
-        }
-        // 其他事件可以忽略
-
         cJSON_Delete(root);
     }
 }
 
-// ==================== 公共 API ====================
-
-esp_err_t voice_chat_client_init(void) {
+// ---------- 初始化 ----------
+esp_err_t voice_chat_client_init(void)
+{
     if (g_ws) return ESP_OK;
 
-    // 1. 获取 access token
-    esp_err_t ret = baidu_get_access_token();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "❌ 获取 access token 失败");
-        return ret;
+    if (baidu_get_access_token() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to get access token");
+        return ESP_FAIL;
     }
 
-    // 2. 拼接 WebSocket URL
-    snprintf(g_full_url, sizeof(g_full_url),
-             "%s?model=%s&access_token=%s",
-             BAIDU_WS_URL_BASE, BAIDU_MODEL, g_access_token);
+    char ws_url[512];
+    snprintf(ws_url, sizeof(ws_url), "%s?model=%s&access_token=%s",
+             BAIDU_WS_URL, BAIDU_MODEL, g_access_token);
 
     esp_websocket_client_config_t cfg = {
-        .uri = g_full_url,
+        .uri = ws_url,
         .task_prio = tskIDLE_PRIORITY + 5,
         .task_stack = 16384,
         .buffer_size = 8192,
@@ -280,44 +273,29 @@ esp_err_t voice_chat_client_init(void) {
     };
 
     g_ws = esp_websocket_client_init(&cfg);
-    if (!g_ws) {
-        ESP_LOGE(TAG, "❌ WebSocket 客户端初始化失败");
-        return ESP_FAIL;
-    }
+    if (!g_ws) return ESP_FAIL;
 
     esp_websocket_register_events(g_ws, WEBSOCKET_EVENT_ANY, ws_event_handler, NULL);
     esp_websocket_client_start(g_ws);
 
-    // 3. 等待连接
     int timeout = 0;
     while (!g_connected && timeout < 50) {
         vTaskDelay(pdMS_TO_TICKS(100));
         timeout++;
     }
     if (!g_connected) {
-        ESP_LOGE(TAG, "❌ WebSocket 连接超时");
         voice_chat_client_deinit();
         return ESP_ERR_TIMEOUT;
     }
 
-    // 4. 发送 session.update (配置 VAD 等，可选)
-    const char *session_update =
-        "{"
-        "\"type\":\"session.update\","
-        "\"session\":{"
-            "\"turn_detection\":{"
-                "\"type\":\"server_vad\","
-                "\"create_response\":true,"
-                "\"interrupt_response\":true"
-            "}"
-        "}"
-        "}";
-    ws_send_text(session_update);
+    // 发送 session.update
+    esp_websocket_client_send_text(g_ws,
+        "{\"type\":\"session.update\",\"session\":{\"turn_detection\":{\"type\":\"server_vad\",\"create_response\":true,\"interrupt_response\":true}}}",
+        strlen("{\"type\":\"session.update\",\"session\":{\"turn_detection\":{\"type\":\"server_vad\",\"create_response\":true,\"interrupt_response\":true}}}"),
+        pdMS_TO_TICKS(3000));
 
-    // 5. 等待 session.updated (短暂延时)
     vTaskDelay(pdMS_TO_TICKS(500));
-
-    ESP_LOGI(TAG, "✅ 百度语音客户端初始化完成");
+    ESP_LOGI(TAG, "✅ Voice chat client initialized");
     return ESP_OK;
 }
 
@@ -331,33 +309,29 @@ esp_err_t voice_chat_client_send_audio(
     *reply_len = 0;
     if (!g_connected) return ESP_ERR_INVALID_STATE;
 
-    // 设置接收缓冲区
     g_recv_buf = reply_buf;
     g_recv_len = 0;
     g_recv_max = max_reply_len;
     g_recv_done = false;
     g_wait_task = xTaskGetCurrentTaskHandle();
 
-    // 1. 分片发送音频数据 (通过 JSON base64)
     size_t offset = 0;
     while (offset < pcm_bytes) {
         size_t chunk_size = (pcm_bytes - offset) > AUDIO_FRAME_BYTES ? AUDIO_FRAME_BYTES : (pcm_bytes - offset);
         
-        // base64 编码
-        size_t b64_needed = 4 * ((chunk_size + 2) / 3) + 1; // 估算
+        size_t b64_needed = 4 * ((chunk_size + 2) / 3) + 1;
         char *b64_buf = malloc(b64_needed);
-        if (!b64_buf) {
-            ESP_LOGE(TAG, "❌ 内存不足");
-            return ESP_ERR_NO_MEM;
-        }
-        int b64_len = base64_encode((const uint8_t *)pcm_audio + offset, chunk_size, b64_buf, b64_needed);
-        if (b64_len < 0) {
-            ESP_LOGE(TAG, "❌ base64编码失败");
+        if (!b64_buf) return ESP_ERR_NO_MEM;
+
+        size_t olen = 0;
+        int ret = mbedtls_base64_encode((unsigned char *)b64_buf, b64_needed, &olen,
+                                        (const unsigned char *)pcm_audio + offset, chunk_size);
+        if (ret != 0) {
             free(b64_buf);
             return ESP_FAIL;
         }
+        b64_buf[olen] = '\0';
 
-        // 构建 JSON 消息
         cJSON *root = cJSON_CreateObject();
         cJSON_AddStringToObject(root, "type", "input_audio_buffer.append");
         cJSON_AddStringToObject(root, "audio", b64_buf);
@@ -365,30 +339,25 @@ esp_err_t voice_chat_client_send_audio(
         cJSON_Delete(root);
         free(b64_buf);
 
-        // 发送
-        esp_err_t ret = ws_send_text(json_str);
+        esp_err_t err = ws_send_text(json_str);
         free(json_str);
-        if (ret != ESP_OK) {
+        if (err != ESP_OK) {
             ESP_LOGE(TAG, "❌ 发送音频帧失败");
-            return ret;
+            return err;
         }
 
         offset += chunk_size;
-        vTaskDelay(pdMS_TO_TICKS(AUDIO_FRAME_MS)); // 控制发送速率
+        vTaskDelay(pdMS_TO_TICKS(AUDIO_FRAME_MS));
     }
 
-    // 2. 提交音频
-    ws_send_text("{\"type\":\"input_audio_buffer.commit\"}");
-
-    // 3. 请求合成回复
-    ws_send_text("{\"type\":\"response.create\"}");
-
-    // 4. 等待回复 (最多15秒)
+    // 等待 response.done 或 error 事件（超时 15 秒）
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(15000));
-    
-    *reply_len = g_recv_len;
+
+    // 无论是否超时，清空全局指针，避免悬空
+    g_recv_buf = NULL;
     g_wait_task = NULL;
 
+    *reply_len = g_recv_len;
     ESP_LOGI(TAG, "✅ 接收完成：%zu 字节", *reply_len);
     return ESP_OK;
 }

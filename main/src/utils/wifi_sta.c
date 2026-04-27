@@ -10,8 +10,8 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
-#define WIFI_SSID           "baron_phone"
-#define WIFI_PASS           "heng0829"
+#define WIFI_SSID           "baron"
+#define WIFI_PASS           "1811603013"
 #define WIFI_CONNECTED_BIT  BIT0
 #define WIFI_FAIL_BIT       BIT1
 
