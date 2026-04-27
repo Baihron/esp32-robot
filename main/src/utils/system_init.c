@@ -16,6 +16,7 @@
 #include "fs_driver.h"
 #include "state_manager.h"
 #include "task_controller.h"
+#include "wifi_sta.h"
 #include "audio_manager.h"
 #include "board_wrapper.h"
 
@@ -275,6 +276,8 @@ esp_err_t system_init_all(void)
         ESP_LOGE(TAG, "Input system initialization failed");
         return ret;
     }
+
+    wifi_init_sta();
 
     print_system_info();
 

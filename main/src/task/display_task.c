@@ -98,9 +98,13 @@ static void display_task_func(void *arg)
     // 初始化视线追踪
     eye_tracking_init(NULL);  // 使用默认配置
 
-    // 表情相关变量
+        // 表情相关变量
     static uint32_t last_emotion_update = 0;
     static emotion_type_t current_emotion = EMOTION_NEUTRAL;
+    static system_state_t last_state = STATE_SLEEP;
+    static uint32_t auto_change_timer = 0;
+    static uint32_t auto_change_interval = 0;
+    static bool first_unlock = false;
 
     // 主循环
     while (1) {
@@ -120,10 +124,35 @@ static void display_task_func(void *arg)
             // 获取当前系统状态
             system_state_t current_state = state_manager_get_state();
 
+            if (current_state != last_state) {
+                ESP_LOGI(TAG, "State changed from %d to %d", last_state, current_state);
+                
+                if (current_state == STATE_LOCKED) {
+                    // 进入锁定状态 - 显示中性表情
+                    ESP_LOGI(TAG, "Entering LOCKED state, showing neutral face");
+                    emotion_set_current(EMOTION_NEUTRAL);
+                    current_emotion = EMOTION_NEUTRAL;
+                    first_unlock = true;  // 标记下一次解锁是首次
+                    auto_change_timer = 0;
+                }
+                
+                last_state = current_state;
+            }
+
             // 根据系统状态决定显示内容
             if (current_state == STATE_UNLOCKED) {
-                // ESP_LOGI(TAG, "display_running Current state STATE_UNLOCKED");
-                // 解锁状态：显示表情
+                // 首次解锁显示开心表情
+                if (first_unlock) {
+                    ESP_LOGI(TAG, "First unlock since lock, showing happy face");
+                    emotion_set_current(EMOTION_HAPPY);
+                    current_emotion = EMOTION_HAPPY;
+                    first_unlock = false;
+                    
+                    // 设置第一次自动切换的间隔（1-2分钟随机）
+                    auto_change_interval = (uint32_t)((60000 + (rand() % 60001)) / portTICK_PERIOD_MS);
+                    auto_change_timer = xTaskGetTickCount();
+                    ESP_LOGI(TAG, "First auto-change in %.1f seconds", auto_change_interval * portTICK_PERIOD_MS / 1000.0f);
+                }
 
                 // 更新表情动画
                 uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
@@ -139,13 +168,13 @@ static void display_task_func(void *arg)
                 if (g_emotion_change_flag != EMOTION_FLAG_NEUTRAL) {
                     ESP_LOGI(TAG, "Emotion change flag detected: %d", g_emotion_change_flag);
                     
-                    emotion_type_t new_emotion = EMOTION_NEUTRAL;
+                    emotion_type_t new_emotion = EMOTION_HAPPY;
                     
                     if (g_emotion_change_flag == EMOTION_FLAG_RANDOM) {
                         // 随机选择一个表情（排除中性、眨眼和当前表情）
                         do {
-                            new_emotion = (rand() % (EMOTION_COUNT - 2)) + 1; // 排除中性(0)和眨眼(8)
-                        } while (new_emotion == current_emotion);
+                            new_emotion = (emotion_type_t)((rand() % (EMOTION_COUNT - 2)) + 1); // 排除中性(0)和眨眼(8)
+                        }  while (new_emotion == current_emotion || new_emotion == EMOTION_BLINKING);
                         
                         ESP_LOGI(TAG, "Random emotion selected: %s", emotion_get_name(new_emotion));
                     } else {
@@ -179,7 +208,7 @@ static void display_task_func(void *arg)
                                 new_emotion = EMOTION_BLINKING;
                                 break;
                             default:
-                                new_emotion = EMOTION_NEUTRAL;
+                                new_emotion = EMOTION_HAPPY;
                                 break;
                         }
                     }
@@ -190,8 +219,31 @@ static void display_task_func(void *arg)
 
                     // 重置标志
                     g_emotion_change_flag = EMOTION_FLAG_NEUTRAL;
+                    // 重置自动切换计时器
+                    auto_change_interval = (uint32_t)((60000 + (rand() % 60001)) / portTICK_PERIOD_MS);
+                    auto_change_timer = xTaskGetTickCount();
                     
                     ESP_LOGI(TAG, "Emotion changed to: %s", emotion_get_name(new_emotion));
+                }
+
+                // 自动切换检查（1-2分钟随机）
+                if (xTaskGetTickCount() - auto_change_timer >= auto_change_interval) {
+                    emotion_type_t new_emotion;
+                    // 随机选择一个表情（排除眨眼和当前表情）
+                    do {
+                        new_emotion = (emotion_type_t)((rand() % (EMOTION_COUNT - 2)) + 1);
+                    } while (new_emotion == current_emotion || new_emotion == EMOTION_BLINKING);
+                    
+                    ESP_LOGI(TAG, "Auto-change timer expired, switching to: %s", emotion_get_name(new_emotion));
+                    emotion_set_current(new_emotion);
+                    current_emotion = new_emotion;
+                    
+                    // 设置下一次自动切换的间隔（1-2分钟随机）
+                    auto_change_interval = (uint32_t)((60000 + (rand() % 60001)) / portTICK_PERIOD_MS);
+                    auto_change_timer = xTaskGetTickCount();
+                    
+                    ESP_LOGI(TAG, "Next auto-change in %.1f seconds", 
+                             auto_change_interval * portTICK_PERIOD_MS / 1000.0f);
                 }
 
                 int total_pixels = g_display_task.width * g_display_task.height;
@@ -220,12 +272,15 @@ static void display_task_func(void *arg)
                 vTaskDelay(pdMS_TO_TICKS(10));
 
             } else if (current_state == STATE_LOCKED) {
-                // 锁定状态：显示锁定界面
-                // ESP_LOGI(TAG, "display_running Current state STATE_LOCKED");
                 int total_pixels = g_display_task.width * g_display_task.height;
                 for (int i = 0; i < total_pixels; i++) {
                     g_display_task.framebuffer[i] = 0xFFFF;
                 }
+
+                // 绘制中性表情
+                emotion_draw_to_buffer(g_display_task.framebuffer, 
+                                      g_display_task.width, 
+                                      g_display_task.height);
 
                 // 刷新显示
                 vTaskDelay(pdMS_TO_TICKS(2));

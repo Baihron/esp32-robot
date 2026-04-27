@@ -7,10 +7,13 @@ idf_component_register(
         "src/task/face_recognition_task.cpp"
         "src/task/state_manager.c"
         "src/task/task_controller.c"
+        "src/task/voice_chat_task.c"
 
         "src/utils/board_wrapper.cpp"
         "src/utils/frame_queue.c"
         "src/utils/system_init.c"
+        "src/utils/wifi_sta.c"
+        "src/utils/voice_chat_client.c"
 
         "src/emotion/emotion_system.c"
         "src/emotion/eye_tracking.c"
@@ -30,6 +33,8 @@ idf_component_register(
     REQUIRES spiffs
     REQUIRES audio
     REQUIRES protocols
+    REQUIRES esp_websocket_client
+    REQUIRES esp_http_client
 )
 
 target_compile_options(${COMPONENT_LIB} PRIVATE "-fexceptions")

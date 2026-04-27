@@ -95,8 +95,7 @@ void eye_tracking_update_face_position(float face_center_x, float face_center_y,
     g_eye_tracking.raw_face_y = face_center_y;
     g_eye_tracking.last_face_time = timestamp_ms;
     
-    ESP_LOGI(TAG, "Raw face position: center=(%.1f, %.1f), size=(%.1f, %.1f)", 
-             face_center_x, face_center_y, face_width, face_height);
+    ESP_LOGI(TAG, "Raw face position: center=(%.1f, %.1f), size=(%.1f, %.1f)", face_center_x, face_center_y, face_width, face_height);
 
     // 计算相对于屏幕中心的偏移（归一化到 -1 ~ 1）
     // 假设屏幕尺寸为240x240，中心为(120,120)
@@ -106,7 +105,11 @@ void eye_tracking_update_face_position(float face_center_x, float face_center_y,
     // 将人脸位置转换为视线偏移
     float new_target_x = (face_center_x - screen_center_x) / screen_center_x;
     float new_target_y = (face_center_y - screen_center_y) / screen_center_y;
-    
+
+#ifdef CONFIG_EYE_TRACKING_INVERT_X
+    new_target_x = -new_target_x;
+#endif
+
     // 限制范围
     if (new_target_x > 1.0f) new_target_x = 1.0f;
     if (new_target_x < -1.0f) new_target_x = -1.0f;

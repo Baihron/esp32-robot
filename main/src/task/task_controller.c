@@ -66,7 +66,7 @@ static void enter_locked_mode(void)
     if (!g_tasks.display_running) {
         // ESP_LOGI(TAG, "start display task");
         if (display_task_start() == ESP_OK) {
-            ESP_LOGI(TAG, "Display task started");
+            ESP_LOGI(TAG, "Display task already started");
         } else {
             ESP_LOGW(TAG, "Failed to start display task");
         }

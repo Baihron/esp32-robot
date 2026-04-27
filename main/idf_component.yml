@@ -15,4 +15,5 @@ dependencies:
   espressif/cjson: '*'
   espressif/mqtt: '*'
   78/esp-wifi-connect: ~3.1.2
+  espressif/esp_websocket_client: "*"
   78/esp-ml307: ~3.6.5

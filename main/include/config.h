@@ -10,7 +10,7 @@
 #define DISPLAY_TASK            (1)    // 启用显示系统
 #define SD_CARD                 (0)    // 启用SD卡存储
 #define FACE_DETECT_TASK        (1)    // 启用人脸检测系统
-
+#define VOICE_CHAT_TASK         (1)    // 启用语音聊天任务
 
 // ============================================
 // 系统配置
@@ -102,7 +102,7 @@
     #define DEBUG_HEAP_CHECK()
 #endif
 
-// #define CONFIG_DEBUG_PRINT
+#define CONFIG_DEBUG_PRINT
 
 // ============================================
 // 错误码定义
@@ -117,5 +117,12 @@
 // 性能监控
 // ============================================
 #define PERFORMANCE_SAMPLING_RATE      10     // 每10秒采样一次性能数据
+
+#define CONFIG_EYE_TRACKING_INVERT_X            // 人脸追踪，翻转X轴
+
+// 语音聊天配置
+#define VOICE_CHAT_TASK_PRIORITY (tskIDLE_PRIORITY + 2)
+#define VOICE_CHAT_TASK_STACK    8192       // 8KB 栈空间
+#define VOICE_CHAT_RECORD_DURATION_MS 3000  // 录制时长3秒
 
 #endif /* __CONFIG_H__ */

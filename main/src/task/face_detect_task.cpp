@@ -277,7 +277,7 @@ static void face_app_task(void *arg)
                 last_detection_time = current_time;
             } else {
 #ifdef CONFIG_DEBUG_PRINT
-                ESP_LOGI(TAG_FACE, "人脸识别任务正在运行，请勿重复操作");
+                // ESP_LOGI(TAG_FACE, "人脸识别任务正在运行，请勿重复操作");
 #endif
             }
         }
