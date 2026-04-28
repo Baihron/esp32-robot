@@ -9,9 +9,9 @@ extern "C" {
  * @brief INMP441 麦克风硬件引脚配置（I2S 标准模式）
  */
 #define MIC_I2S_PORT          I2S_NUM_0       // 使用 I2S0
-#define MIC_PIN_BCK           41              // I2S 位时钟 (BCK / SCK)
-#define MIC_PIN_WS            42              // I2S 字选择 (WS / LRCLK)
-#define MIC_PIN_DIN           40              // I2S 数据输入 (SD / DOUT)
+#define MIC_PIN_BCK           4              // I2S 位时钟 (BCK / SCK)
+#define MIC_PIN_WS            5              // I2S 字选择 (WS / LRCLK)
+#define MIC_PIN_DIN           6              // I2S 数据输入 (SD / DOUT)
 
 /**
  * @brief 音频采样参数

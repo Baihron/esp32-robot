@@ -5,6 +5,7 @@
 #include <math.h>
 #include <string.h>
 #include "eye_tracking.h"
+#include "config.h"
 
 static const char *TAG = "EMOTION_SYSTEM";
 
@@ -185,7 +186,12 @@ static void draw_eyes_with_tracking(uint16_t* framebuffer, uint16_t width, uint1
     eye_tracking_get_offset(&offset_x, &offset_y);
     
     // 放大偏移效果，让眼睛移动更明显
-    float final_offset_x = offset_x * 1.5f;  // 增加1.5倍
+#ifdef CONFIG_EYE_TRACKING_INVERT_X
+    float final_offset_x = (offset_x + 20) * 1.0f;
+#else
+    float final_offset_x = (offset_x - 20) * 1.0f;
+#endif
+
     float final_offset_y = offset_y * 1.0f;
     
     // 打印当前偏移

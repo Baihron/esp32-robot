@@ -13,7 +13,7 @@
 #define CAM_PIN_D1      12
 #define CAM_PIN_D3      13
 #define CAM_PIN_D5      14
-#define CAM_PIN_D7      19
+#define CAM_PIN_D7      7
 
 #define CAM_PIN_XCLK    -1
 

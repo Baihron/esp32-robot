@@ -32,7 +32,7 @@ esp_err_t dis_driver_init(const dis_config_t *config)
         .sclk_io_num = config->sclk_gpio,
         .mosi_io_num = config->mosi_gpio,
         .miso_io_num = -1,
-        .max_transfer_sz = 2048,
+        .max_transfer_sz = 240 * 10 * sizeof(uint16_t),
         .flags = 0,
         .intr_flags = 0
     };
@@ -46,8 +46,8 @@ esp_err_t dis_driver_init(const dis_config_t *config)
         .pclk_hz = config->pclk_hz,
         .lcd_cmd_bits = 8,
         .lcd_param_bits = 8,
-        .spi_mode = 0,
-        .trans_queue_depth = 10,
+        .spi_mode = 3,
+        .trans_queue_depth = 4,
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(SPI2_HOST, &io_config, &io_handle));
 
@@ -66,7 +66,7 @@ esp_err_t dis_driver_init(const dis_config_t *config)
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
 
     // 分配帧缓冲区 - 确保32位对齐
-    ESP_LOGI(TAG, "Allocating framebuffer");
+    // ESP_LOGI(TAG, "Allocating framebuffer");
     size_t buffer_size = g_width * g_height * sizeof(uint16_t);
     // 对齐到4字节
     g_framebuffer = heap_caps_malloc(buffer_size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -94,7 +94,6 @@ esp_err_t dis_flush(void)
 
     esp_err_t ret = ESP_FAIL;
     ret = esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, g_width, g_height, g_framebuffer);
-    vTaskDelay(pdMS_TO_TICKS(1));  // 短暂延迟后重试
 
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "dis_flush failed after retries: %s", esp_err_to_name(ret));

@@ -102,7 +102,7 @@
     #define DEBUG_HEAP_CHECK()
 #endif
 
-// #define CONFIG_DEBUG_PRINT
+#define CONFIG_DEBUG_PRINT
 
 // ============================================
 // 错误码定义
@@ -117,5 +117,7 @@
 // 性能监控
 // ============================================
 #define PERFORMANCE_SAMPLING_RATE      10     // 每10秒采样一次性能数据
+
+#define CONFIG_EYE_TRACKING_INVERT_X            // 人脸追踪，翻转X轴
 
 #endif /* __CONFIG_H__ */

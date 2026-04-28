@@ -16,7 +16,7 @@ extern task_status_t g_tasks;
 extern volatile emotion_change_flag_t g_emotion_change_flag;
 
 // 显示任务配置
-volatile static struct {
+static struct {
     TaskHandle_t task_handle;
     uint32_t display_count;        // 统计：显示的帧数
     uint32_t process_time_ms;      // 上次处理时间（毫秒）
@@ -37,9 +37,6 @@ volatile static struct {
     .error_count = 0,
     .last_diagnose_time = 0
 };
-
-// 按钮标志（从其他文件引入）
-// extern uint8_t btn0_press_flag;
 
 // 初始化随机数生成器
 static void init_random(void)
@@ -122,7 +119,7 @@ static void display_task_func(void *arg)
 
             // 根据系统状态决定显示内容
             if (current_state == STATE_UNLOCKED) {
-                // ESP_LOGI(TAG, "display_running Current state STATE_UNLOCKED");
+                ESP_LOGI(TAG, "display_running Current state STATE_UNLOCKED");
                 // 解锁状态：显示表情
 
                 // 更新表情动画
@@ -221,7 +218,7 @@ static void display_task_func(void *arg)
 
             } else if (current_state == STATE_LOCKED) {
                 // 锁定状态：显示锁定界面
-                // ESP_LOGI(TAG, "display_running Current state STATE_LOCKED");
+                ESP_LOGI(TAG, "display_running Current state STATE_LOCKED");
                 int total_pixels = g_display_task.width * g_display_task.height;
                 for (int i = 0; i < total_pixels; i++) {
                     g_display_task.framebuffer[i] = 0xFFFF;
@@ -235,7 +232,7 @@ static void display_task_func(void *arg)
             } else {
                 int total_pixels = g_display_task.width * g_display_task.height;
                 for (int i = 0; i < total_pixels; i++) {
-                    g_display_task.framebuffer[i] = 0x0000;
+                    g_display_task.framebuffer[i] = 0xA0A0;
                 }
                 ESP_LOGI(TAG, "display_running Current state STATE_ELSE");
                 vTaskDelay(pdMS_TO_TICKS(2));
@@ -291,10 +288,10 @@ esp_err_t display_task_init(UBaseType_t priority,
     }
 
     dis_get_size(&g_display_task.width, &g_display_task.height);
-    ESP_LOGI(TAG, "LCD initialized: %dx%d, buffer at %p", g_display_task.width, g_display_task.height, g_display_task.framebuffer);
+    // ESP_LOGI(TAG, "LCD initialized: %dx%d, buffer at %p", g_display_task.width, g_display_task.height, g_display_task.framebuffer);
 
-    // 清屏为黑色
-    uint16_t black = 0x0000;
+    // 清屏
+    uint16_t black = 0xffff;
     int total_pixels = g_display_task.width * g_display_task.height;
     for (int i = 0; i < total_pixels; i++) {
         g_display_task.framebuffer[i] = black;
@@ -342,7 +339,7 @@ esp_err_t display_task_start(void)
     }
 
     g_tasks.display_running = true;
-    ESP_LOGI(TAG, "Display task started");
+    ESP_LOGI(TAG, "display_task_start");
 
     // 清屏
     // uint16_t white = 0xAAAA;
@@ -352,8 +349,8 @@ esp_err_t display_task_start(void)
     // }
 
     // 等待任务开始运行
-    vTaskDelay(pdMS_TO_TICKS(50));
-    flush_display();
+    // vTaskDelay(pdMS_TO_TICKS(50));
+    // flush_display();
 
     return ESP_OK;
 }

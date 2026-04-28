@@ -49,15 +49,6 @@ static void system_monitor_task(void)
             ESP_LOGI(TAG, "Internal free: %d bytes", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
             ESP_LOGI(TAG, "Frame Queue: %d frames waiting", queue_count);
             
-            // 获取任务状态
-            bool camera_running, display_running, face_detection_running;
-            task_controller_get_status(&camera_running, &display_running, &face_detection_running);
-            
-            ESP_LOGI(TAG, "Tasks - Camera: %s, Display: %s, FaceDetection: %s",
-                     camera_running ? "RUNNING" : "STOPPED",
-                     display_running ? "RUNNING" : "STOPPED",
-                     face_detection_running ? "RUNNING" : "STOPPED");
-            
             // 获取系统配置
             const system_config_t* config = system_get_config();
             ESP_LOGI(TAG, "Config - Camera: %s, Display: %s, SD Card: %s, FaceDetect: %s",

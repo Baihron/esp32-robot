@@ -2,6 +2,7 @@
 #include "esp_log.h"
 #include <math.h>
 #include <string.h>
+#include "config.h"
 
 static const char *TAG = "EYE_TRACKING";
 
@@ -106,7 +107,11 @@ void eye_tracking_update_face_position(float face_center_x, float face_center_y,
     // 将人脸位置转换为视线偏移
     float new_target_x = (face_center_x - screen_center_x) / screen_center_x;
     float new_target_y = (face_center_y - screen_center_y) / screen_center_y;
-    
+
+#ifdef CONFIG_EYE_TRACKING_INVERT_X
+    new_target_x = -new_target_x;
+#endif
+
     // 限制范围
     if (new_target_x > 1.0f) new_target_x = 1.0f;
     if (new_target_x < -1.0f) new_target_x = -1.0f;

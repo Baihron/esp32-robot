@@ -11,8 +11,7 @@
 #include "frame_queue.h"
 #include "config.h"
 #include "common_type.h"
-#include "audio_manager.h"
-#include "board_wrapper.h"
+#include "voice_wake_task.h"
 
 static const char *TAG = "TASK_CONTROLLER";
 
@@ -24,6 +23,7 @@ static void enter_sleep_mode(void)
 {
     ESP_LOGI(TAG, "Entering sleep mode...");
 
+    // voice_wake_stop();
     // 停止所有任务
     if (g_tasks.face_recognition_running) {
         ESP_LOGI(TAG, "Stopping face recognition task");
@@ -55,6 +55,7 @@ static void enter_locked_mode(void)
 {
     ESP_LOGI(TAG, "Entering locked mode...");
 
+    // voice_wake_stop();
     // 初始化并启动显示任务
     if (!g_tasks.display_initialized) {
         ESP_LOGI(TAG, "Initializing display task");
@@ -66,7 +67,7 @@ static void enter_locked_mode(void)
     if (!g_tasks.display_running) {
         // ESP_LOGI(TAG, "start display task");
         if (display_task_start() == ESP_OK) {
-            ESP_LOGI(TAG, "Display task started");
+            ESP_LOGI(TAG, "Display task started --");
         } else {
             ESP_LOGW(TAG, "Failed to start display task");
         }
@@ -148,6 +149,8 @@ static void enter_unlocked_mode(void)
         face_detect_task_start();
         g_tasks.face_detection_running = true;
     }
+
+    // voice_wake_start();
 
     ESP_LOGI(TAG, "Unlocked mode entered, system ready");
 }
