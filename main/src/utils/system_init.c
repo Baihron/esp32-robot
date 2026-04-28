@@ -268,11 +268,6 @@ esp_err_t system_init_all(void)
         ESP_LOGW(TAG, "Face recognition system initialization failed, continuing anyway");
     }
 
-    // ret = voice_wake_init(NULL);   // 暂不设置回调
-    // if (ret != ESP_OK) {
-    //     ESP_LOGW(TAG, "Voice wake init failed, continuing");
-    // }
-
     // 初始化输入系统
     ret = init_input_system();
     if (ret != ESP_OK) {

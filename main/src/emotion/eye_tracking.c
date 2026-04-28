@@ -96,8 +96,7 @@ void eye_tracking_update_face_position(float face_center_x, float face_center_y,
     g_eye_tracking.raw_face_y = face_center_y;
     g_eye_tracking.last_face_time = timestamp_ms;
     
-    ESP_LOGI(TAG, "Raw face position: center=(%.1f, %.1f), size=(%.1f, %.1f)", 
-             face_center_x, face_center_y, face_width, face_height);
+    ESP_LOGI(TAG, "Raw face position: center=(%.1f, %.1f), size=(%.1f, %.1f)", face_center_x, face_center_y, face_width, face_height);
 
     // 计算相对于屏幕中心的偏移（归一化到 -1 ~ 1）
     // 假设屏幕尺寸为240x240，中心为(120,120)
