@@ -13,12 +13,9 @@
 #include "face_detect_task.h"
 #include "face_recognition_task.h"
 #include "flash_driver.h"
-#include "fs_driver.h"
 #include "state_manager.h"
 #include "task_controller.h"
 #include "wifi_sta.h"
-#include "audio_manager.h"
-#include "board_wrapper.h"
 
 static const char *TAG = "SYSTEM_INIT";
 

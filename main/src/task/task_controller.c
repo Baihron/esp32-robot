@@ -11,8 +11,6 @@
 #include "frame_queue.h"
 #include "config.h"
 #include "common_type.h"
-#include "audio_manager.h"
-#include "board_wrapper.h"
 
 static const char *TAG = "TASK_CONTROLLER";
 

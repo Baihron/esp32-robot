@@ -9,7 +9,6 @@ idf_component_register(
         "src/task/task_controller.c"
         "src/task/voice_chat_task.c"
 
-        "src/utils/board_wrapper.cpp"
         "src/utils/frame_queue.c"
         "src/utils/system_init.c"
         "src/utils/wifi_sta.c"
@@ -31,8 +30,6 @@ idf_component_register(
     REQUIRES flash_driver
     REQUIRES mico_driver
     REQUIRES spiffs
-    REQUIRES audio
-    REQUIRES protocols
     REQUIRES esp_websocket_client
     REQUIRES esp_http_client
     REQUIRES mbedtls
