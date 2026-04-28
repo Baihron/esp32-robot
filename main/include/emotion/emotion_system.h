@@ -75,6 +75,9 @@ void emotion_system_deinit(void);
 // 获取表情名称
 const char* emotion_get_name(emotion_type_t emotion);
 
+// 获取当前是否处于眨眼状态
+bool emotion_is_blinking(void);
+
 #ifdef __cplusplus
 }
 #endif
