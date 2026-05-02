@@ -80,7 +80,7 @@ esp_err_t dis_driver_init(const dis_config_t *config)
     memset(g_framebuffer, 0, buffer_size);
 
     g_initialized = true;
-    ESP_LOGI(TAG, "LCD initialized: %dx%d, buffer at %p", g_width, g_height, g_framebuffer);
+    // ESP_LOGI(TAG, "LCD initialized: %dx%d, buffer at %p", g_width, g_height, g_framebuffer);
     return ESP_OK;
 }
 
@@ -93,6 +93,7 @@ esp_err_t dis_flush(void)
     }
 
     esp_err_t ret = ESP_FAIL;
+    ESP_LOGI(TAG, "dis_flush 刷新屏幕");
     ret = esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, g_width, g_height, g_framebuffer);
 
     if (ret != ESP_OK) {

@@ -8,10 +8,10 @@
 #include "display_task.h"
 #include "face_detect_task.h"
 #include "face_recognition_task.h"
+#include "voice_chat_task.h"
 #include "frame_queue.h"
 #include "config.h"
 #include "common_type.h"
-#include "voice_wake_task.h"
 
 static const char *TAG = "TASK_CONTROLLER";
 
@@ -43,6 +43,10 @@ static void enter_sleep_mode(void)
     if (g_tasks.display_running) {
         ESP_LOGI(TAG, "Stopping display task");
         display_task_stop();
+    }
+
+    if(g_tasks.voice_running) {
+        g_tasks.voice_running = false;
     }
 
     // 清空帧队列
@@ -150,6 +154,15 @@ static void enter_unlocked_mode(void)
         g_tasks.face_detection_running = true;
     }
 
+    if(!g_tasks.voice_initialized) {
+        if(voice_chat_task_init() == ESP_OK) {
+            g_tasks.voice_initialized = true;
+        }
+    }
+
+    if(!g_tasks.voice_running) {
+        g_tasks.voice_running = true;
+    }
     // voice_wake_start();
 
     ESP_LOGI(TAG, "Unlocked mode entered, system ready");
@@ -181,7 +194,7 @@ static void enter_face_enrolling_mode(void)
         // face_detection_set_mode(ENROLL_MODE);
         g_tasks.face_detection_running = true;
     }
-    
+
     // 显示人脸录入界面（需要实现）
     // display_task_show_enroll_screen();
     

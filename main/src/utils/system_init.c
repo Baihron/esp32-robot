@@ -12,11 +12,12 @@
 #include "button_task.h"
 #include "face_detect_task.h"
 #include "face_recognition_task.h"
+#include "voice_chat_task.h"
 #include "flash_driver.h"
 #include "fs_driver.h"
 #include "state_manager.h"
 #include "task_controller.h"
-#include "voice_wake_task.h"
+#include "wifi_sta.h"
 
 static const char *TAG = "SYSTEM_INIT";
 
@@ -30,6 +31,8 @@ static system_config_t g_system_config = {
 
 // 初始化状态
 static bool g_system_initialized = false;
+
+static TaskHandle_t s_voice_task_handle = NULL;
 
 extern task_status_t g_tasks;
 // 初始化摄像头系统
@@ -182,6 +185,15 @@ static esp_err_t init_input_system(void)
     return ESP_OK;
 }
 
+static void voice_init_task(void *arg)
+{
+    esp_err_t ret = voice_chat_task_init();
+    if(ret != ESP_OK) {
+        ESP_LOGI(TAG, "Voice chat init failed: %s", esp_err_to_name(ret));
+    }
+    vTaskDelete(NULL);
+}
+
 // 初始化状态管理系统
 static esp_err_t init_state_management(void)
 {
@@ -237,6 +249,9 @@ esp_err_t system_init_all(void)
         return ret;
     }
 
+    // 初始化wifi
+    wifi_init_sta();
+
     // 初始化摄像头系统
     ret = init_camera_system();
     if (ret != ESP_OK) {
@@ -274,6 +289,16 @@ esp_err_t system_init_all(void)
         ESP_LOGE(TAG, "Input system initialization failed");
         return ret;
     }
+
+    // 初始化语音聊天系统
+    xTaskCreatePinnedToCore(
+        voice_init_task,
+        "voice_asr_task",
+        16384,
+        NULL,
+        tskIDLE_PRIORITY + 1,
+        &s_voice_task_handle,
+        1);
 
     print_system_info();
 

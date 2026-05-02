@@ -22,10 +22,12 @@ typedef struct {
     bool display_initialized;
     bool face_detection_initialized;
     bool face_recognition_initialized;
+    bool voice_initialized;
     bool camera_running;
     bool display_running;
     bool face_detection_running;
     bool face_recognition_running;
+    bool voice_running;
 } task_status_t;
 
 // 系统状态定义
