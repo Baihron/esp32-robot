@@ -322,10 +322,17 @@ esp_err_t display_task_init(UBaseType_t priority,
     }
 
     dis_get_size(&g_display_task.width, &g_display_task.height);
+<<<<<<< HEAD
     ESP_LOGI(TAG, "Init LCD initialized: %dx%d, buffer at %p", g_display_task.width, g_display_task.height, g_display_task.framebuffer);
 
     // 清屏为黑色
     uint16_t black = 0xffff;
+=======
+    ESP_LOGI(TAG, "LCD initialized: %dx%d, buffer at %p", g_display_task.width, g_display_task.height, g_display_task.framebuffer);
+
+    // 清屏为黑色
+    uint16_t black = 0x0000;
+>>>>>>> 8075e1f988f29ac333f57ab28104462662655f5e
     int total_pixels = g_display_task.width * g_display_task.height;
     for (int i = 0; i < total_pixels; i++) {
         g_display_task.framebuffer[i] = black;
