@@ -1,19 +1,14 @@
 #include "display_task.h"
-#include "emotion_system.h"
-#include "state_manager.h"
 
-#include "button_task.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
-#include "eye_tracking.h"
 #include <math.h>
 
 static const char *TAG = "DISPLAY_TASK";
 
-extern task_status_t g_tasks;
 extern volatile emotion_change_flag_t g_emotion_change_flag;
 
 // 显示任务配置
@@ -47,15 +42,6 @@ static struct {
     .last_offset_x = 0.0f,
     .last_offset_y = 0.0f
 };
-
-// 初始化随机数生成器
-static void init_random(void)
-{
-    if (!g_display_task.random_initialized) {
-        srand((unsigned int)esp_timer_get_time());
-        g_display_task.random_initialized = true;
-    }
-}
 
 // 刷新屏幕
 static esp_err_t flush_display(void)
@@ -91,194 +77,16 @@ static esp_err_t flush_display(void)
 // 显示任务函数
 static void display_task_func(void *arg)
 {
-    init_random();
-
-    // 初始化表情系统
-    esp_err_t emotion_ret = emotion_system_init();
-    if (emotion_ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize emotion system: %s", esp_err_to_name(emotion_ret));
-    } else {
-        ESP_LOGI(TAG, "Emotion system initialized");
-    }
-
-    // 初始化视线追踪
-    eye_tracking_init(NULL);
-
-    // 表情相关变量
-    static uint32_t last_emotion_update = 0;
-    static emotion_type_t current_emotion = EMOTION_NEUTRAL;
-    static system_state_t last_state = STATE_SLEEP;
-    static uint32_t auto_change_timer = 0;
-    static uint32_t auto_change_interval = 0;
-    static bool first_unlock = false;
-
     // 主循环
     while (1) {
-        if (g_tasks.display_running) {
-            // 检查帧缓冲区有效性
-            if (!g_display_task.framebuffer) {
-                ESP_LOGE(TAG, "Framebuffer is NULL, attempting recovery");
-                g_display_task.framebuffer = dis_get_framebuffer();
-                if (!g_display_task.framebuffer) {
-                    ESP_LOGE(TAG, "Failed to get framebuffer, waiting...");
-                    vTaskDelay(pdMS_TO_TICKS(1000));
-                    continue;
-                }
-                ESP_LOGI(TAG, "Recovered framebuffer at %p", g_display_task.framebuffer);
-            }
 
-            // ===== 1. 更新动画（始终执行） =====
-            uint32_t current_time = xTaskGetTickCount() * portTICK_PERIOD_MS;
-            if (last_emotion_update == 0) {
-                last_emotion_update = current_time;
-            }
-            uint32_t elapsed = current_time - last_emotion_update;
-            last_emotion_update = current_time;
-            emotion_update_animation(elapsed);
-
-            // ===== 2. 检测是否需要重绘 =====
-            system_state_t current_state = state_manager_get_state();
-            bool should_redraw = false;
-
-            // 2.1 系统状态变化
-            if (current_state != last_state) {
-                ESP_LOGI(TAG, "State changed from %d to %d", last_state, current_state);
-                should_redraw = true;
-                if (current_state == STATE_LOCKED) {
-                    ESP_LOGI(TAG, "Entering LOCKED state, showing neutral face");
-                    emotion_set_current(EMOTION_NEUTRAL);
-                    current_emotion = EMOTION_NEUTRAL;
-                    first_unlock = true;
-                    auto_change_timer = 0;
-                    // 锁定状态下禁止视线追踪
-                    eye_tracking_set_enabled(false);
-                } else if (current_state == STATE_UNLOCKED) {
-                    // 解锁后恢复视线追踪
-                    eye_tracking_set_enabled(true);
-                }
-                last_state = current_state;
-            }
-
-            // 2.2 表情切换标志
-            if (g_emotion_change_flag != EMOTION_FLAG_NEUTRAL) {
-                should_redraw = true;
-                ESP_LOGI(TAG, "Emotion change flag detected: %d", g_emotion_change_flag);
-                emotion_type_t new_emotion = EMOTION_HAPPY;
-                if (g_emotion_change_flag == EMOTION_FLAG_RANDOM) {
-                    do {
-                        new_emotion = (emotion_type_t)((rand() % (EMOTION_COUNT - 2)) + 1);
-                    } while (new_emotion == current_emotion || new_emotion == EMOTION_BLINKING);
-                    ESP_LOGI(TAG, "Random emotion selected: %s", emotion_get_name(new_emotion));
-                } else {
-                    switch (g_emotion_change_flag) {
-                        case EMOTION_FLAG_HAPPY:     new_emotion = EMOTION_HAPPY; break;
-                        case EMOTION_FLAG_SAD:       new_emotion = EMOTION_SAD; break;
-                        case EMOTION_FLAG_ANGRY:     new_emotion = EMOTION_ANGRY; break;
-                        case EMOTION_FLAG_SURPRISED: new_emotion = EMOTION_SURPRISED; break;
-                        case EMOTION_FLAG_SLEEPY:    new_emotion = EMOTION_SLEEPY; break;
-                        case EMOTION_FLAG_LOVING:    new_emotion = EMOTION_LOVING; break;
-                        case EMOTION_FLAG_CONFUSED:  new_emotion = EMOTION_CONFUSED; break;
-                        case EMOTION_FLAG_LAUGHING:  new_emotion = EMOTION_LAUGHING; break;
-                        case EMOTION_FLAG_BLINKING:  new_emotion = EMOTION_BLINKING; break;
-                        default: new_emotion = EMOTION_HAPPY; break;
-                    }
-                }
-                emotion_set_current(new_emotion);
-                current_emotion = new_emotion;
-                g_emotion_change_flag = EMOTION_FLAG_NEUTRAL;
-                auto_change_interval = (uint32_t)((60000 + (rand() % 60001)) / portTICK_PERIOD_MS);
-                auto_change_timer = xTaskGetTickCount();
-                ESP_LOGI(TAG, "Emotion changed to: %s", emotion_get_name(new_emotion));
-            }
-
-            // 2.3 眨眼状态变化
-            bool current_blink = emotion_is_blinking();
-            if (current_blink != g_display_task.last_blink_state) {
-                should_redraw = true;
-                g_display_task.last_blink_state = current_blink;
-            }
-
-            // 2.4 视线偏移变化（仅在解锁状态且有人脸时）
-            if (current_state == STATE_UNLOCKED && eye_tracking_has_face()) {
-                float ox, oy;
-                eye_tracking_get_offset(&ox, &oy);
-                if (fabsf(ox - g_display_task.last_offset_x) > 2.0f ||
-                    fabsf(oy - g_display_task.last_offset_y) > 2.0f) {
-                    should_redraw = true;
-                    g_display_task.last_offset_x = ox;
-                    g_display_task.last_offset_y = oy;
-                }
-            }
-
-            // 2.5 首次解锁后的自动切换计时到期
-            if (current_state == STATE_UNLOCKED && !first_unlock) {
-                if (xTaskGetTickCount() - auto_change_timer >= auto_change_interval) {
-                    should_redraw = true;
-                    emotion_type_t new_emotion;
-                    do {
-                        new_emotion = (emotion_type_t)((rand() % (EMOTION_COUNT - 2)) + 1);
-                    } while (new_emotion == current_emotion || new_emotion == EMOTION_BLINKING);
-                    ESP_LOGI(TAG, "Auto-change timer expired, switching to: %s", emotion_get_name(new_emotion));
-                    emotion_set_current(new_emotion);
-                    current_emotion = new_emotion;
-                    auto_change_interval = (uint32_t)((60000 + (rand() % 60001)) / portTICK_PERIOD_MS);
-                    auto_change_timer = xTaskGetTickCount();
-                    ESP_LOGI(TAG, "Next auto-change in %.1f seconds", 
-                             auto_change_interval * portTICK_PERIOD_MS / 1000.0f);
-                }
-            }
-
-            // 2.6 如果第一次解锁，也触发重绘
-            if (current_state == STATE_UNLOCKED && first_unlock) {
-                should_redraw = true;
-                ESP_LOGI(TAG, "First unlock since lock, showing happy face");
-                emotion_set_current(EMOTION_HAPPY);
-                current_emotion = EMOTION_HAPPY;
-                first_unlock = false;
-                auto_change_interval = (uint32_t)((60000 + (rand() % 60001)) / portTICK_PERIOD_MS);
-                auto_change_timer = xTaskGetTickCount();
-            }
-
-            // ===== 3. 执行绘制和刷新 =====
-            if (should_redraw) {
-                // 清屏（使用 memset 加速）
-                int total_bytes = g_display_task.width * g_display_task.height * sizeof(uint16_t);
-                memset(g_display_task.framebuffer, 0xFF, total_bytes); // 白色背景
-
-                // 根据状态绘制表情
-                if (current_state == STATE_UNLOCKED) {
-                    emotion_draw_to_buffer(g_display_task.framebuffer, 
-                                          g_display_task.width, 
-                                          g_display_task.height);
-                } else if (current_state == STATE_LOCKED) {
-                    emotion_draw_to_buffer(g_display_task.framebuffer, 
-                                          g_display_task.width, 
-                                          g_display_task.height);
-                } else {
-                    // 其他状态：保持全黑（休眠等）
-                    memset(g_display_task.framebuffer, 0x00, total_bytes);
-                    ESP_LOGI(TAG, "display_running Current state STATE_ELSE");
-                }
-
-                // 刷新显示
-                vTaskDelay(pdMS_TO_TICKS(2));
-                esp_err_t flush_ret = flush_display();
-                if (flush_ret != ESP_OK) {
-                    ESP_LOGE(TAG, "Flush failed with error: %s", esp_err_to_name(flush_ret));
-                    vTaskDelay(pdMS_TO_TICKS(10));
-                    flush_display();
-                }
-                vTaskDelay(pdMS_TO_TICKS(10));
-
-                // 降低帧率：每次重绘后稍微等待
-                vTaskDelay(pdMS_TO_TICKS(30));
-            } else {
-                // 无变化时延长等待（约 10 FPS）
-                vTaskDelay(pdMS_TO_TICKS(90));
-            }
-        } else {
-            vTaskDelay(pdMS_TO_TICKS(50));
+        int total_pixels = g_display_task.width * g_display_task.height;
+        for (int i = 0; i < total_pixels; i++) {
+            g_display_task.framebuffer[i] = 0x1a1a;
         }
+
+        flush_display();
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -322,17 +130,10 @@ esp_err_t display_task_init(UBaseType_t priority,
     }
 
     dis_get_size(&g_display_task.width, &g_display_task.height);
-<<<<<<< HEAD
     ESP_LOGI(TAG, "Init LCD initialized: %dx%d, buffer at %p", g_display_task.width, g_display_task.height, g_display_task.framebuffer);
 
     // 清屏为黑色
     uint16_t black = 0xffff;
-=======
-    ESP_LOGI(TAG, "LCD initialized: %dx%d, buffer at %p", g_display_task.width, g_display_task.height, g_display_task.framebuffer);
-
-    // 清屏为黑色
-    uint16_t black = 0x0000;
->>>>>>> 8075e1f988f29ac333f57ab28104462662655f5e
     int total_pixels = g_display_task.width * g_display_task.height;
     for (int i = 0; i < total_pixels; i++) {
         g_display_task.framebuffer[i] = black;
@@ -344,7 +145,7 @@ esp_err_t display_task_init(UBaseType_t priority,
     vTaskDelay(pdMS_TO_TICKS(100));  // 等待刷新完成
 
     // 任务未运行状态
-    g_tasks.display_running = false;
+    // .display_running = false;
 
     // 创建任务
     BaseType_t result = xTaskCreatePinnedToCore(
@@ -374,12 +175,6 @@ esp_err_t display_task_start(void)
         return ESP_ERR_INVALID_STATE;
     }
 
-    if (g_tasks.display_running) {
-        ESP_LOGW(TAG, "Display task already running");
-        return ESP_OK;
-    }
-
-    g_tasks.display_running = true;
     ESP_LOGI(TAG, "Display task started");
 
     // 清屏
@@ -398,7 +193,7 @@ esp_err_t display_task_start(void)
 
 esp_err_t display_task_stop(void)
 {
-    g_tasks.display_running = false;
+    // g_tasks.display_running = false;
 
     uint16_t black = 0x0000;
     int total_pixels = g_display_task.width * g_display_task.height;
@@ -421,7 +216,7 @@ TaskHandle_t display_task_get_handle(void)
 
 bool display_task_is_running(void)
 {
-    return g_tasks.display_running;
+    return true; // g_tasks.display_running;
 }
 
 void display_task_deinit(void)

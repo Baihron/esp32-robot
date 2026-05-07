@@ -2,10 +2,8 @@
 #include "freertos/task.h"
 #include "esp_timer.h"
 #include "esp_log.h"
-
-#include "system_init.h"
-#include "task_controller.h"
 #include "config.h"
+#include "display_task.h"
 
 #ifdef CONFIG_DEBUG_PRINT
 #include "esp_heap_caps.h"
@@ -66,18 +64,16 @@ static void system_monitor_task(void)
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Starting Black Camera System...");
-    
-    // 系统初始化
-    esp_err_t ret = system_init_all();
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "System initialization failed: %s", esp_err_to_name(ret));
-        return;
-    }
+    esp_err_t ret = display_task_init(
+        tskIDLE_PRIORITY + 3,
+        4096,
+        0
+    );
 
-    // ESP_LOGI(TAG, "System initialized successfully");
-    // // 启动任务控制器
-    task_controller_start();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Display task initialization failed: %s", esp_err_to_name(ret));
+        // return ret;
+    }
 
 #ifdef CONFIG_DEBUG_PRINT
     ESP_LOGI(TAG, "System started. Current state: %s", system_get_status_string());
