@@ -322,10 +322,10 @@ esp_err_t display_task_init(UBaseType_t priority,
     }
 
     dis_get_size(&g_display_task.width, &g_display_task.height);
-    ESP_LOGI(TAG, "Init LCD initialized: %dx%d, buffer at %p", g_display_task.width, g_display_task.height, g_display_task.framebuffer);
+    ESP_LOGI(TAG, "LCD initialized: %dx%d, buffer at %p", g_display_task.width, g_display_task.height, g_display_task.framebuffer);
 
     // 清屏为黑色
-    uint16_t black = 0xffff;
+    uint16_t black = 0x0000;
     int total_pixels = g_display_task.width * g_display_task.height;
     for (int i = 0; i < total_pixels; i++) {
         g_display_task.framebuffer[i] = black;
@@ -376,15 +376,15 @@ esp_err_t display_task_start(void)
     ESP_LOGI(TAG, "Display task started");
 
     // 清屏
-    // uint16_t white = 0xAAAA;
-    // int total_pixels = g_display_task.width * g_display_task.height;
-    // for (int i = 0; i < total_pixels; i++) {
-    //     g_display_task.framebuffer[i] = white;
-    // }
+    uint16_t white = 0x0000;
+    int total_pixels = g_display_task.width * g_display_task.height;
+    for (int i = 0; i < total_pixels; i++) {
+        g_display_task.framebuffer[i] = white;
+    }
 
     // 等待任务开始运行
-    // vTaskDelay(pdMS_TO_TICKS(50));
-    // flush_display();
+    vTaskDelay(pdMS_TO_TICKS(50));
+    flush_display();
 
     return ESP_OK;
 }

@@ -108,7 +108,7 @@ static void process_face_detect(void)
         captured_frames[i].frame = frame_queue_receive_data(pdMS_TO_TICKS(100));
 
         if (!captured_frames[i].frame) {
-            ESP_LOGW(TAG_FACE, "Failed to get frame %d", i + 1);
+            // ESP_LOGW(TAG_FACE, "Failed to get frame %d", i + 1);
             continue;
         }
 

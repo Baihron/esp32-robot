@@ -46,7 +46,7 @@ esp_err_t dis_driver_init(const dis_config_t *config)
         .pclk_hz = config->pclk_hz,
         .lcd_cmd_bits = 8,
         .lcd_param_bits = 8,
-        .spi_mode = 3,
+        .spi_mode = 0,
         .trans_queue_depth = 4,
     };
     ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi(SPI2_HOST, &io_config, &io_handle));
@@ -93,7 +93,7 @@ esp_err_t dis_flush(void)
     }
 
     esp_err_t ret = ESP_FAIL;
-    ESP_LOGI(TAG, "dis_flush 刷新屏幕");
+    // ESP_LOGI(TAG, "dis_flush 刷新屏幕");
     ret = esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, g_width, g_height, g_framebuffer);
 
     if (ret != ESP_OK) {
