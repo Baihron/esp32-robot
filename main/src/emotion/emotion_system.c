@@ -11,6 +11,7 @@ static const char *TAG = "EMOTION_SYSTEM";
 
 // 表情配置表
 static const emotion_config_t emotion_configs[] = {
+    {EMOTION_NEUTRAL,   "Neutral",     0, 3000, false},
     {EMOTION_HAPPY,     "Happy",       0, 4000, true},
     {EMOTION_SAD,       "Sad",         0, 5000, false},
     {EMOTION_ANGRY,     "Angry",       0, 6000, false},
@@ -20,7 +21,6 @@ static const emotion_config_t emotion_configs[] = {
     {EMOTION_CONFUSED,  "Confused",    0, 2500, true},
     {EMOTION_BLINKING,  "Blinking",    500,    0, false},
     {EMOTION_LAUGHING,  "Laughing",    0, 2000, true},
-    {EMOTION_NEUTRAL,   "Neutral",     0, 3000, false}
 };
 
 // 表情系统状态
@@ -710,6 +710,10 @@ void emotion_draw_to_buffer(uint16_t* framebuffer, uint16_t width, uint16_t heig
                     draw_happy_face(framebuffer, width, height, &g_emotion.context, true);
                     break;
             }
+            break;
+
+        case EMOTION_LAUGHING:
+            draw_laughing_face(framebuffer, width, height, &g_emotion.context, blinking);
             break;
 
         default:

@@ -4,6 +4,7 @@
 #include "mico_driver.h"
 #include "state_manager.h"
 #include "task_controller.h"
+#include "emotion_system.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -172,7 +173,45 @@ static void voice_chat_task_func(void *pvParameters)
                             esp_err_t llm_ret = llm_chat_get_emotion(asr_result, emotion, sizeof(emotion));
                             if (llm_ret == ESP_OK && strlen(emotion) > 0) {
                                 ESP_LOGI(TAG, "Detected emotion: %s", emotion);
-                                // 在真实项目中替换为你的表情控制函数，例如 set_emotion(emotion);
+
+                                extern emotion_change_flag_t g_emotion_change_flag;
+                                // 根据大模型返回的情感字符串映射到表情类型
+                                emotion_type_t new_emotion = EMOTION_NEUTRAL;
+                                if (strstr(emotion, "happy") || strstr(emotion, "joy")) {
+                                    new_emotion = EMOTION_HAPPY;
+                                    g_emotion_change_flag = EMOTION_FLAG_HAPPY;
+                                } else if (strstr(emotion, "sad") || strstr(emotion, "sorrow")) {
+                                    new_emotion = EMOTION_SAD;
+                                    g_emotion_change_flag = EMOTION_FLAG_SAD;
+                                } else if (strstr(emotion, "angry") || strstr(emotion, "anger") || strstr(emotion, "mad")) {
+                                    new_emotion = EMOTION_ANGRY;
+                                    g_emotion_change_flag = EMOTION_FLAG_ANGRY;
+                                } else if (strstr(emotion, "surprise") || strstr(emotion, "surprised")) {
+                                    new_emotion = EMOTION_SURPRISED;
+                                    g_emotion_change_flag = EMOTION_FLAG_SURPRISED;
+                                } else if (strstr(emotion, "sleepy") || strstr(emotion, "sleep") || strstr(emotion, "tired")) {
+                                    new_emotion = EMOTION_SLEEPY;
+                                    g_emotion_change_flag = EMOTION_FLAG_SLEEPY;
+                                } else if (strstr(emotion, "love") || strstr(emotion, "loving") || strstr(emotion, "affection")) {
+                                    new_emotion = EMOTION_LOVING;
+                                    g_emotion_change_flag = EMOTION_FLAG_LOVING;
+                                } else if (strstr(emotion, "confused") || strstr(emotion, "confusion")) {
+                                    new_emotion = EMOTION_CONFUSED;
+                                    g_emotion_change_flag = EMOTION_FLAG_CONFUSED;
+                                } else if (strstr(emotion, "laugh") || strstr(emotion, "laughing")) {
+                                    new_emotion = EMOTION_LAUGHING;
+                                    g_emotion_change_flag = EMOTION_FLAG_LAUGHING;
+                                } else {
+                                    // 未匹配时设为中性
+                                    // new_emotion = EMOTION_NEUTRAL;
+                                    // g_emotion_change_flag = EMOTION_FLAG_NEUTRAL;
+                                }
+
+                                // 设置表情并触发显示更新
+                                // if(new_emotion != EMOTION_NEUTRAL) {
+                                //     emotion_set_current(new_emotion);
+                                //     ESP_LOGI(TAG, "Set emotion to: %s", emotion_get_name(new_emotion));
+                                // }
                             } else {
                                 ESP_LOGE(TAG, "Failed to get emotion from LLM");
                                 // 可选：设置默认表情

@@ -57,7 +57,10 @@ static void system_monitor_task(void)
                      config->sd_card_enabled ? "ENABLED" : "DISABLED",
                      config->face_detect_enabled ? "ENABLED" : "DISABLED");
             
-            
+            char stats_buf[1024];
+            vTaskGetRunTimeStats(stats_buf);
+            ESP_LOGI(TAG, "=== Task CPU Stats ===\n%s", stats_buf);
+
             ESP_LOGI(TAG, "=====================");
         }
 #endif

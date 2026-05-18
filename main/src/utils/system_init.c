@@ -257,8 +257,9 @@ esp_err_t system_init_all(void)
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Camera system initialization failed");
         // 可以继续初始化其他系统，或者返回错误
+        return ret;
     }
-    
+
     // 初始化显示系统
     ret = init_display_system();
     if (ret != ESP_OK) {

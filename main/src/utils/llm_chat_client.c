@@ -91,8 +91,8 @@ esp_err_t llm_chat_get_emotion(const char *user_text,
     // 1. 系统提示词（未转义原始版）
     const char *system_prompt_raw =
         "你是一个情感判断机器人。根据用户的输入，从以下表情列表中选择最恰当的一个：\n"
-        "可用表情：happy（开心），sad（难过），angry（愤怒），comforting（安慰），"
-        "cute（可爱），neutral（中性），surprised（惊讶）\n"
+        "可用表情：happy（开心），sad（难过），angry（愤怒），surprised（惊讶），"
+        "sleepy（困倦），loving（爱心），confused（困惑）,laughing（大笑）,neutral（中性）\n"
         "你必须只回答一个表情单词，不要添加任何其他字符或标点。\n"
         "neutral（中性）是一个特殊的返回信号，只有当你完全无法判断出应该要表达什么心情时才可以返回neutral（中性）。\n"
         "例如：用户说“我今天好开心”，你回答“happy”。";
